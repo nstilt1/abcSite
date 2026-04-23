@@ -81,6 +81,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  
+  --page-bg: oklch(1 0 0);
+  --navbar-bg: oklch(0.985 0 0);
+  --footer-bg: oklch(0.97 0 0);
 }
 
 .dark {
@@ -115,6 +119,21 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  
+  --page-bg: oklch(20.639% 0.00789 285.654);
+  --navbar-bg: oklch(23.467% 0.0308 19.593);
+  --footer-bg: oklch(0.12 0.01 270);
+  --hue-radial: radial-gradient(
+    circle at 0% -5%, /* move center off-screen */
+    hsl(0 90% 50%) 0%,
+    hsl(60 90% 50%) 20%,
+    hsl(120 90% 50%) 40%,
+    hsl(180 90% 50%) 60%,
+    hsl(240 90% 50%) 80%,
+    hsl(300 90% 50%) 100%
+  );
+
+
 }
 
 @layer base {
@@ -126,5 +145,185 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@keyframes abc-logo-hue-cycle {
+  from {
+    filter: hue-rotate(0deg) saturate(1.4);
+  }
+  to {
+    filter: hue-rotate(360deg) saturate(1.4);
+  }
+}
+
+.abc-logo-cycle {
+  animation: abc-logo-hue-cycle 50s linear infinite;
+}
+.abc-logo-cycle:hover {
+  animation: abc-logo-hue-cycle 3s linear infinite;
+}
+.abc-logo-cycle-2 {
+  animation: abc-logo-hue-cycle 4s linear infinite;
+}
+
+:root {
+  --navbar-height: 5rem;
+  --footer-height: 300px;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100svh;
+  background: var(--page-bg);
+}
+
+.site-shell {
+  position: relative;
+  z-index: 11;
+}
+
+.site-inner-content {
+  position: relative;
+  z-index: 11;
+  background: var(--page-bg);
+  overflow: hidden;
+  min-height: calc(100svh - var(--navbar-height));
+}
+
+.site-main {
+  min-height: calc(100svh - var(--navbar-height));
+}
+
+.site-footer-spacer {
+  width: 100%;
+  height: 1px;
+  margin-bottom: var(--footer-height);
+  background: var(--page-bg);
+}
+
+.site-footer-fixed {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: var(--footer-height);
+  z-index: -100;
+}
+
+footer a {
+  transition: all 0.2s ease;
+}
+
+footer img {
+  transition: filter 0.3s ease;
+}
+
+footer img:hover {
+  animation: abc-logo-hue-cycle 3s linear infinite;
+}
+
+:root {
+  --navbar-height: 5rem;
+  --footer-height: 320px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --footer-height: 460px;
+  }
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--foreground);
+}
+
+.site-inner-content {
+  background: var(--page-bg);
+}
+
+.site-footer-spacer {
+  background: var(--page-bg);
+}
+
+.main-nav {
+  background: var(--hue-radial);
+  animation: abc-logo-hue-cycle 5s linear infinite;
+  overflow: hidden;
+}
+
+.main-nav::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.35); /* dimmer strength */
+  pointer-events: none; /* overlay doesn't block clicks */
+  backdrop-filter: blur(20px); /* optional: dreamy softness */
+}
+
+.main-nav > .content {
+  position: relative;
+  z-index: 2;
+}
+
+.nav-btn {
+  border-radius: 0.9rem;
+  background: rgba(46, 43, 43, 0.541);
+  backdrop-filter: blur(8px);
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.nav-btn-active {
+  background: rgba(80, 59, 59, 0.411);
+}
+
+/* main page */
+.hero-mobile-image {
+  transform: rotate(90deg) scale(1.7);
+  transform-origin: center;
+}
+
+@media (min-width: 768px) {
+  .hero-mobile-image {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+.abc-brain-rotate {
+  animation:
+    brain 4s linear infinite,
+    brain-rotate 4s ease-in-out infinite;
+}
+
+@keyframes brain {
+  0% {
+    filter: hue-rotate(0deg) saturate(1.03);
+  }
+  50% {
+    filter: hue-rotate(180deg) saturate(1.03);
+  }
+  100% {
+    filter: hue-rotate(360deg) saturate(1.03);
+  }
+}
+
+@keyframes brain-rotate {
+  0% {
+    transform: rotate(-15deg) scale(1);
+  }
+  50% {
+    transform: rotate(30deg) scale(0.85);
+  }
+  100% {
+    transform: rotate(-15deg) scale(1);
   }
 }
