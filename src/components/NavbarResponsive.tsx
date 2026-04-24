@@ -69,7 +69,7 @@ function isActiveRoute(pathname: string, href: string): boolean {
 export default function NavbarResponsive() {
   const pathname = usePathname();
   const router = useRouter();
-  const { isSignedIn, isAdmin, displayName, signOut } = useAuthState();
+  const { isSignedIn, isAdmin, account, signOut } = useAuthState();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -168,7 +168,7 @@ export default function NavbarResponsive() {
                 <div className="absolute right-0 top-12 w-64 rounded-2xl border border-border/60 bg-popover p-2 shadow-xl">
                   <div className="px-3 py-2">
                     <div className="text-sm font-medium text-popover-foreground">
-                      {displayName || "Signed in"}
+                      {account?.displayName || "Signed in"}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       Account options
@@ -259,7 +259,7 @@ export default function NavbarResponsive() {
                     <Separator className="my-6" />
 
                     <div className="mb-3">
-                      <div className="text-sm font-medium">{displayName || "Signed in"}</div>
+                      <div className="text-sm font-medium">{account?.displayName || "Signed in"}</div>
                       <div className="text-xs text-muted-foreground">
                         Account options
                       </div>
