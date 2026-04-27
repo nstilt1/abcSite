@@ -1,17 +1,20 @@
+import downloadsJson from "@/content/downloads.json";
+import webappsJson from "@/content/webapps.json";
+import blogsJson from "@/content/blogs.json";
 import productsJson from "@/content/products.json";
-import projectsJson from "@/content/projects.json";
-import servicesJson from "@/content/services.json";
 import type { CollectionName, ContentItem } from "@/lib/content-types";
 
-const services = servicesJson as ContentItem[];
-const projects = projectsJson as ContentItem[];
+const downloads = downloadsJson as ContentItem[];
+const webapps = webappsJson as ContentItem[];
 const products = productsJson as ContentItem[];
+const blogs = blogsJson as ContentItem[];
 
-export const COLLECTIONS: CollectionName[] = ["services", "projects", "products"];
+export const COLLECTIONS: CollectionName[] = ["blogs", "downloads", "products", "webapps"];
 
 const store: Record<CollectionName, ContentItem[]> = {
-  services,
-  projects,
+  downloads,
+  blogs,
+  webapps,
   products,
 };
 
@@ -30,8 +33,9 @@ export function getItem(collection: string, slug: string): ContentItem | null {
 
 export function getAllItems(): Record<CollectionName, ContentItem[]> {
   return {
-    services: getCollection("services"),
-    projects: getCollection("projects"),
+    blogs: getCollection("blogs"),
+    downloads: getCollection("downloads"),
+    webapps: getCollection("webapps"),
     products: getCollection("products"),
   };
 }

@@ -1,20 +1,25 @@
-import { getAllProducts, getAllProjects, getAllServices } from "@/lib/content";
+import { getAllProducts, getAllBlogs, getAllDownloads, getAllWebapps } from "@/lib/content";
 import type { CollectionName, ContentRegistryEntry } from "@/lib/content-types";
 
 export const CONTENT: Record<CollectionName, ContentRegistryEntry> = {
   products: {
     label: "Products",
-    basePath: "/portfolio/products",
+    basePath: "/products",
     getAll: getAllProducts,
   },
-  services: {
-    label: "Services",
-    basePath: "/portfolio/services",
-    getAll: getAllServices,
+  blogs: {
+    label: "Blogs",
+    basePath: "/blog",
+    getAll: getAllBlogs,
   },
-  projects: {
-    label: "Projects",
-    basePath: "/portfolio/projects",
-    getAll: getAllProjects,
+  downloads: {
+    label: "Downloads",
+    basePath: "/downloads",
+    getAll: getAllDownloads,
   },
+  webapps: {
+    label: "Web Apps",
+    basePath: "/webapps",
+    getAll: getAllWebapps,
+  }
 };

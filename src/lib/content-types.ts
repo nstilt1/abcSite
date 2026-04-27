@@ -1,4 +1,4 @@
-export type CollectionName = "services" | "projects" | "products";
+export type CollectionName = "downloads" | "blogs" | "products" | "webapps";
 
 export interface ContentItem {
   slug: string;

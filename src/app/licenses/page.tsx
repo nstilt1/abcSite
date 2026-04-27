@@ -1,19 +1,19 @@
 import { RequireAuth } from "@/components/RequireAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function SettingsPage() {
+export default function ProfilePage() {
   return (
     <RequireAuth>
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle>Settings</CardTitle>
+          <CardTitle>Licenses</CardTitle>
           <CardDescription>
-            Manage preferences, notifications, connected services, and account security.
+            Your software licenses.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>Put notification toggles, theme preferences, and account-level controls here.</p>
+          <p>Show licenses here.</p>
         </CardContent>
       </Card>
     </div>

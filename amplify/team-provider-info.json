@@ -10,6 +10,11 @@
       "StackName": "amplify-abcsite-dev-9af16",
       "StackId": "arn:aws:cloudformation:us-east-1:744502367450:stack/amplify-abcsite-dev-9af16/c4367b20-3767-11f1-9ac0-0e957af028f5",
       "AmplifyAppId": "d2z4jgfgfmunde"
+    },
+    "categories": {
+      "auth": {
+        "abcsite925a2da9": {}
+      }
     }
   }
 }
