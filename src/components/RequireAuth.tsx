@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchAuthSession } from "aws-amplify/auth";
 
@@ -9,6 +9,12 @@ type RequireAuthProps = {
 };
 
 export function RequireAuth({ children }: RequireAuthProps) {
+    return (
+        <Suspense><RequireAuthInner>{children}</RequireAuthInner></Suspense>
+    )
+}
+
+function RequireAuthInner({ children }: RequireAuthProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
