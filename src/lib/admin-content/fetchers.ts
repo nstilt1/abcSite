@@ -1,3 +1,4 @@
+// src/lib/admin-content/fetchers.ts
 import { sectionConfig } from "./config";
 import type { AdminSectionKey } from "./types";
 
@@ -31,10 +32,10 @@ export async function fetchSectionItems<T>(section: AdminSectionKey): Promise<T[
   return (await res.json()) as T[];
 }
 
-function getUpdateUrl(): string {
+export function getUpdateUrl(): string {
     return process.env.UPDATE_FN_URL ?? "";
 }
 
-function getRebuildUrl(): string {
+export function getRebuildUrl(): string {
     return process.env.REBUILD_URL ?? "";
 }

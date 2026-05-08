@@ -15,9 +15,9 @@ export function mediaURL(path: string | null | undefined): string | null {
   let cdn = "";
 
   if (siteUrl.includes("www")) {
-    cdn = siteUrl.replace("www", "cdn");
+    cdn = siteUrl.replace("www", "cdn2");
   } else if (siteUrl.includes("//")) {
-    cdn = siteUrl.replace("//", "//cdn.");
+    cdn = siteUrl.replace("//", "//cdn2.");
   } else {
     cdn = siteUrl;
   }

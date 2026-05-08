@@ -9,7 +9,29 @@ const links = [
   { href: "/admin/blogs", label: "Blogs" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/web-apps", label: "Web-apps" },
+  { href: "/admin/media", label: "Media Upload" },
 ];
+
+const softwareLicensorMenuItems = [
+  {
+    label: "General Info",
+    href: "/admin/software-licensor",
+  },
+  {
+    label: "Store Registration",
+    href: "/admin/software-licensor/store-registration",
+  },
+  {
+    label: "Create/Update Licensed Product",
+    href: "/admin/software-licensor/products",
+  },
+  {
+    label: "Import/Export Private Key",
+    href: "/admin/software-licensor/private-key",
+  },
+];
+
+const all_links = links.concat(softwareLicensorMenuItems);
 
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -21,7 +43,7 @@ export function AdminSidebar() {
       </div>
 
       <nav className="p-2 space-y-1">
-        {links.map((link) => {
+        {all_links.map((link) => {
           const active = pathname === link.href;
 
           return (

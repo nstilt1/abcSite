@@ -17,6 +17,7 @@ import {
   Settings,
   Shield,
   ShoppingBag,
+  ShoppingCart,
   User,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useAuthState } from "@/hooks/useAuthState";
+import { useCart } from "@/hooks/useCart";
 
 type NavRoute = {
   name: string;
@@ -98,6 +100,8 @@ export default function NavbarResponsive() {
     () => signedInMenuItems.filter((item) => !item.adminOnly || isAdmin),
     [isAdmin]
   );
+
+  const { cartCount } = useCart();
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -258,6 +262,7 @@ export default function NavbarResponsive() {
           </Link>
 
           {isSignedIn ? (
+            <div>
             <div className="relative hidden md:block" ref={profileMenuRef}>
               <Button
                 variant="ghost"
@@ -313,6 +318,17 @@ export default function NavbarResponsive() {
                   </div>
                 </div>
               ) : null}
+            </div>
+            <Link href="/cart" className="relative hidden md:inline-flex">
+              <Button variant="ghost" size="icon" aria-label="Open cart">
+                <ShoppingCart className="h-5 w-5" />
+                {cartCount > 0 && (
+                  <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </span>
+                )}
+              </Button>
+            </Link>
             </div>
           ) : null}
 

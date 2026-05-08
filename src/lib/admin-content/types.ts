@@ -1,3 +1,4 @@
+// src/lib/admin-content/types.ts
 import type { JSONContent } from "@tiptap/react";
 
 export type AdminSectionKey = "downloads" | "blogs" | "products" | "web-apps";

@@ -1,3 +1,4 @@
+// src/lib/admin-content/config.ts
 import { getEmptyDoc } from "./utils";
 import { defineCollectionSchema } from "./types";
 import type { CollectionSchema } from "./types";

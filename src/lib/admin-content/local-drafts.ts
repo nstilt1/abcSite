@@ -1,3 +1,4 @@
+// src/lib/admin-content/local-drafts.ts
 import type { AdminSectionKey, DraftState } from "./types";
 
 const PREFIX = "abc-admin-drafts";

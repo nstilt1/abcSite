@@ -1,6 +1,7 @@
+// src/app/admin/[section]/page.tsx
 import { notFound } from "next/navigation";
 import { ContentSectionEditor } from "@/components/admin/ContentSectionEditor";
-import { fetchSectionItems } from "@/lib/admin-content/fetchers";
+import { fetchSectionItems, getUpdateUrl } from "@/lib/admin-content/fetchers";
 import { isAdminSectionKey, sectionConfig } from "@/lib/admin-content/config";
 
 type Props = {
@@ -23,7 +24,7 @@ export default async function AdminSectionPage({ params }: Props) {
     <ContentSectionEditor
       schema={schema as never}
       initialItems={items as never}
-      saveEndpoint="https://yy35luzj4k.execute-api.us-east-1.amazonaws.com/default/update_content"
+      saveEndpoint={getUpdateUrl()}
     />
   );
 }

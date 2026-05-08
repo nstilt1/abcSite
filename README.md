@@ -28,6 +28,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 * `URL_BLOGS`
 * `URL_PRODUCTS`
 * `URL_WEB_APPS`
+* `PRESIGN_URL` - URL of API endpoint for S3 presign requests
+* `SOFTWARE_LICENSOR_DISPATCH_API` - URL of API endpoint
 
 ## Learn More
 

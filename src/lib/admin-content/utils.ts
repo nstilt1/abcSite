@@ -1,3 +1,4 @@
+// src/lib/admin-content/local-drafts.ts
 import type { JSONContent } from "@tiptap/react";
 import type { ChangedSummary } from "./types";
 
