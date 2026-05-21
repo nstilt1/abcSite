@@ -9,11 +9,21 @@
       "UnauthRoleName": "amplify-abcsite-dev-9af16-unauthRole",
       "StackName": "amplify-abcsite-dev-9af16",
       "StackId": "arn:aws:cloudformation:us-east-1:744502367450:stack/amplify-abcsite-dev-9af16/c4367b20-3767-11f1-9ac0-0e957af028f5",
-      "AmplifyAppId": "d2z4jgfgfmunde"
+      "AmplifyAppId": "d2z4jgfgfmunde",
+      "AuthTriggerTemplateURL": "https://s3.amazonaws.com/amplify-abcsite-dev-9af16-deployment/amplify-cfn-templates/auth/auth-trigger-cloudformation-template.json"
     },
     "categories": {
       "auth": {
-        "abcsite925a2da9": {}
+        "abcsite925a2da9": {
+          "googleClientId": "903727253174-knv2003bnchgs5h0evdheos5q4v7pebg.apps.googleusercontent.com"
+        }
+      },
+      "function": {
+        "abcsite925a2da9CustomMessage": {
+          "REDIRECTURL": "https://alteredbrainchemistry.com/",
+          "EMAILSUBJECT": "Verify your email to continue with Altered Brain Chemistry",
+          "EMAILMESSAGE": "You're almost ready to go. Please verify your email address by selecting the link below to complete your Altered Brain Chemistry account setup."
+        }
       }
     }
   }

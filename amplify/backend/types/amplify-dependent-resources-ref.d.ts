@@ -3,6 +3,7 @@ export type AmplifyDependentResourcesAttributes = {
     "abcsite925a2da9": {
       "AppClientID": "string",
       "AppClientIDWeb": "string",
+      "GoogleWebClient": "string",
       "HostedUIDomain": "string",
       "IdentityPoolId": "string",
       "IdentityPoolName": "string",

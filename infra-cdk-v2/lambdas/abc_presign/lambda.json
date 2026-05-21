@@ -1,0 +1,28 @@
+{
+  "description": "Generates S3 presigned upload URLs for admin users. Returns uploadUrl, key, and publicUrl.",
+  "architecture": "arm64",
+  "runtime": "provided.al2023",
+  "timeoutSeconds": 30,
+  "memoryMB": 256,
+
+  "envVars": {
+    "CONTENT_BUCKET": { "fromStack": "bucketName" },
+    "S3_BUCKET_REGION": { "fromStack": "region" },
+    "CLOUDFRONT_BASE_URL": { "fromStack": "cdnUrl" },
+    "RUST_LOG": "info"
+  },
+
+  "s3Access": {
+    "content":   ["put"],
+    "media":     ["put"],
+    "thumbs":    ["put"],
+    "images":    ["put"],
+    "downloads": ["put"]
+  },
+
+  "apiGateway": {
+    "path": "presign",
+    "methods": ["POST", "OPTIONS"],
+    "cognitoAuthorizer": true
+  }
+}

@@ -28,5 +28,39 @@
       "providerPlugin": "awscloudformation",
       "service": "Cognito"
     }
+  },
+  "parameters": {
+    "AMPLIFY_auth_abcsite925a2da9_googleClientId": {
+      "usedBy": [
+        {
+          "category": "auth",
+          "resourceName": "abcsite925a2da9"
+        }
+      ]
+    },
+    "AMPLIFY_function_abcsite925a2da9CustomMessage_EMAILMESSAGE": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "abcsite925a2da9CustomMessage"
+        }
+      ]
+    },
+    "AMPLIFY_function_abcsite925a2da9CustomMessage_EMAILSUBJECT": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "abcsite925a2da9CustomMessage"
+        }
+      ]
+    },
+    "AMPLIFY_function_abcsite925a2da9CustomMessage_REDIRECTURL": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "abcsite925a2da9CustomMessage"
+        }
+      ]
+    }
   }
 }

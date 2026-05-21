@@ -12,7 +12,23 @@ export interface ContentItem {
   [key: string]: unknown;
 }
 
-export type FilterMap = Partial<Record<string, string[]>>;
+export interface ExtendedItem extends ContentItem {
+  type: CollectionName;
+  url?: string;
+  priceCents?: number;
+  productId?: string;
+  softwarelicensor?: {
+    licenses: ("perpetual" | "trial" | "subscription")[];
+  };
+  downloads?: {
+    platform: string;
+    url: string;
+    sha256: string;
+  }[];
+}
+
+export type FilterMap = Partial<Record<string, string[]}>;
+
 
 export interface ContentRegistryEntry {
   label: string;

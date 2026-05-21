@@ -6,6 +6,7 @@ import NavBar from "@/components/NavbarResponsive";
 import { Toaster } from "@/components/ui/sonner";
 import SiteFooter from "@/components/SiteFooter";
 import { CartProvider } from "@/hooks/useCart";
+import AmplifyProvider from "./AmplifyProvider";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -32,21 +33,23 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <SiteFooter />
+        <AmplifyProvider>
+          <SiteFooter />
 
-        <CartProvider>
-          <div className="site-shell">
-            <NavBar />
+          <CartProvider>
+            <div className="site-shell">
+              <NavBar />
 
-            <div className="site-inner-content">
-              <main className="site-main">{children}</main>
+              <div className="site-inner-content">
+                <main className="site-main">{children}</main>
+              </div>
+
+              <div aria-hidden="true" className="site-footer-spacer" />
             </div>
+          </CartProvider>
 
-            <div aria-hidden="true" className="site-footer-spacer" />
-          </div>
-        </CartProvider>
-
-        <Toaster />
+          <Toaster />
+        </AmplifyProvider>
       </body>
     </html>
   );

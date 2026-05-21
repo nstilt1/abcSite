@@ -1,5 +1,7 @@
 {
-  "whyContinueWithGen1": "I find the Gen 1 CLI easier to use",
+  "providers": [
+    "awscloudformation"
+  ],
   "projectName": "abcSite",
   "version": "3.1",
   "frontend": "javascript",
@@ -9,10 +11,7 @@
       "SourceDir": "src",
       "DistributionDir": "build",
       "BuildCommand": "bun run build",
-      "StartCommand": "bun run dev"
+      "StartCommand": "bun run start"
     }
-  },
-  "providers": [
-    "awscloudformation"
-  ]
+  }
 }

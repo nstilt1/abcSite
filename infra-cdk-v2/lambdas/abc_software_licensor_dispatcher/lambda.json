@@ -1,0 +1,24 @@
+{
+  "description": "Software licensing dispatcher: create/get/regenerate licenses, manage products, register stores, handle key import/export.",
+  "architecture": "arm64",
+  "runtime": "provided.al2023",
+  "timeoutSeconds": 60,
+  "memoryMB": 256,
+
+  "envVars": {
+    "CONTENT_BUCKET": { "fromStack": "bucketName" },
+    "S3_BUCKET_REGION": { "fromStack": "region" },
+    "DYNAMO_TABLE_NAME": { "fromStack": "dynamoTableName" },
+    "RUST_LOG": "info"
+  },
+
+  "dynamoAccess": ["get", "put", "update", "query"],
+
+  "selfUpdateConfig": true,
+
+  "apiGateway": {
+    "path": "licensor",
+    "methods": ["POST", "OPTIONS"],
+    "cognitoAuthorizer": true
+  }
+}

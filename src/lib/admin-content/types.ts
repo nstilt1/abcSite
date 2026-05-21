@@ -3,14 +3,16 @@ import type { JSONContent } from "@tiptap/react";
 
 export type AdminSectionKey = "downloads" | "blogs" | "products" | "web-apps";
 
-export type PrimitiveFieldKind =
+export type FieldKind =
   | "text"
   | "textarea"
   | "date"
   | "slug"
   | "string-array-csv"
   | "image"
-  | "thumbnail";
+  | "thumbnail"
+  | "select"
+  | "union";
 
 export type FieldCategory = "metadata" | "image" | "thumbnail";
 
@@ -23,12 +25,14 @@ export type BaseRequiredFields = {
 export type FieldDefinition<TEntry> = {
   key: Extract<keyof TEntry, string>;
   label: string;
-  kind: PrimitiveFieldKind;
+  kind: FieldKind;
   category: FieldCategory;
   placeholder?: string;
   description?: string;
   required?: boolean;
   rows?: number;
+  options?: string[];
+  unionOptions?: Record<string, FieldDefinition<TEntry>[]>;
 };
 
 export type CollectionSchema<TEntry extends BaseRequiredFields> = {

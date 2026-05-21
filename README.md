@@ -40,8 +40,38 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Setup tech stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```sh
+tar -xvzf ./infra-cdk-v2.tar.gz
+cd ./infra-cdk-v2/
+npm install
+# place lambda function build zips into infra-cdk-v2/lambdas/*/builds
+# builds need to be built for aarch64
+cdk bootstrap aws://AWS_ACCOUNT/REGION
+# obtain aws account number from:
+aws sts get-caller-identity
+# e.g. `cdk bootstrap aws://123456789012/us-east-1`
+cdk deploy \
+--context appName=abc-dev \
+--context siteDomain=dev.alteredbrainchemistry.com \
+--context hostedZoneDomain=alteredbrainchemistry.com \
+--context cdnSubdomain=hephaestus \
+--context githubRepo=nstilt1/abcSite \
+--context githubBranch=master \
+--context githubTokenSsmPath=/abc/github-token
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Get the build role name
+aws iam list-roles --query "Roles[?contains(RoleName,'amplifyconsole')].RoleName"
+
+# Deploy again with the build role specified:
+cdk deploy \
+--context appName=abc-dev \
+--context siteDomain=dev.alteredbrainchemistry.com \
+--context hostedZoneDomain=alteredbrainchemistry.com \
+--context cdnSubdomain=hephaestus \
+--context githubRepo=nstilt1/abcSite \
+--context githubBranch=master \
+--context githubTokenSsmPath=/abc/github-token \
+--context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/abc-amplifyconsole-backend-role
+```

@@ -353,6 +353,18 @@ body {
 
   --amplify-components-button-primary-background-color: hsl(var(--primary));
   --amplify-components-button-primary-color: hsl(var(--primary-foreground));
+
+  /* Input text color */
+  --amplify-components-fieldcontrol-color: rgb(220, 220, 220);
+
+  /* Input background */
+  --amplify-components-fieldcontrol-background-color: hsl(var(--card));
+
+  /* Input border */
+  --amplify-components-fieldcontrol-border-color: hsl(var(--border));
+
+  /* Placeholder text */
+  --amplify-components-fieldcontrol-placeholder-color: rgb(160, 160, 160);
 }
 
 .abc-authenticator [data-amplify-authenticator],
@@ -444,4 +456,119 @@ body {
   --amplify-components-checkbox-border-color: #4a90e2;
   --amplify-components-checkbox-checked-background-color: #4a90e2;
   --amplify-components-checkbox-checked-border-color: #4a90e2;
+  --amplify-components-button-outlined-error-color: #ff6363;
+}
+
+.dark .abc-authenticator [data-amplify-fieldcontrol] input[type="password"] {
+  color: rgb(220, 220, 220) !important;
+  background-color: hsl(var(--card)) !important;
+}
+
+.dark .abc-authenticator input[type="password"],
+.dark .abc-authenticator input[type="password"].amplify-input--filled {
+  color: rgb(220, 220, 220) !important;
+  background-color: hsl(var(--card)) !important;
+}
+
+.dark .abc-authenticator {
+  --amplify-components-fieldcontrol-color: rgb(220, 220, 220) !important;
+  --amplify-components-fieldcontrol-background-color: hsl(var(--card)) !important;
+  --amplify-components-fieldcontrol-border-color: hsl(var(--border));
+  --amplify-components-fieldcontrol-placeholder-color: rgb(160, 160, 160);
+}
+
+.dark .abc-authenticator input.amplify-input--filled {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important
+}
+
+.dark .abc-authenticator input[type="password"].amplify-input--filled {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+}
+
+.dark .abc-authenticator [data-amplify-fieldcontrol] input {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.dark .abc-authenticator input.amplify-input--error {
+  border-color: hsl(var(--destructive)) !important; /* your theme red */
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+}
+
+.dark .abc-authenticator {
+  --amplify-components-fieldcontrol-placeholder-color: rgb(150, 150, 150);
+}
+
+/* Base input styling */
+.dark amplify-authenticator::part(input) {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+}
+
+/* Password input */
+.dark amplify-authenticator::part(password-input) {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+}
+
+/* Filled state */
+.dark amplify-authenticator::part(input-filled) {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+}
+
+/* Error state */
+.dark amplify-authenticator::part(input-error) {
+  background-color: hsl(var(--card)) !important;
+  color: rgb(220, 220, 220) !important;
+  border-color: hsl(var(--destructive)) !important;
+}
+
+/* Placeholder */
+.dark amplify-authenticator::part(input-placeholder) {
+  color: rgb(150, 150, 150) !important;
+}
+
+/* Base input styling */
+.dark .abc-authenticator input.amplify-input {
+  background-color: black !important;
+  color: white !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+/* Filled state (after typing) */
+.dark .abc-authenticator input.amplify-input--filled {
+  background-color: black !important;
+  color: white !important;
+}
+
+/* Error state (validation red) */
+.dark .abc-authenticator input.amplify-input--error {
+  background-color: black !important;
+  color: white !important;
+  border-color: #ff6363 !important; /* brighter red */
+}
+
+/* Placeholder text */
+.dark .abc-authenticator input.amplify-input::placeholder {
+  color: #bbbbbb !important;
+}
+
+.amplify-text--error {
+  color: #ff6363 !important;
+}
+
+.amplify-field__show-password--error, .amplify-button--outlined--error {
+  outline-color: #ff6363 !important;
+  border-color: #ff6363 !important;
+  fill:#ff6363 !important;
+}
+
+/* When the input is invalid, recolor the icon */
+.dark .abc-authenticator input[aria-invalid="true"] ~ .amplify-field-group__outer-end {
+  color: #ff4d4d !important;
 }

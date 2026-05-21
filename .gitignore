@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+src/content
+
 #amplify-do-not-edit-begin
 amplify/\#current-cloud-backend
 amplify/.config/local-*
@@ -62,4 +65,11 @@ amplifytools.xcconfig
 **.sample
 #amplify-do-not-edit-end
 
-src/content
+# Lambda build artifacts — compiled from Rust source, not source code
+infra-cdk-v2/lambdas/**/builds/*.zip
+
+infra-cdk-v2/cdk.out/
+
+amplify_backup/
+
+amplify/

@@ -1,0 +1,52 @@
+version: 1
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            # ── Install bun ──────────────────────────────────────────────────
+            - curl -fsSL https://bun.sh/install | bash
+            - export BUN_INSTALL="$HOME/.bun"
+            - export PATH="$BUN_INSTALL/bin:$PATH"
+            - bun --version
+
+            # ── Install dependencies ─────────────────────────────────────────
+            - bun install --frozen-lockfile
+
+            # ── Write .env.production ────────────────────────────────────────
+            # All NEXT_PUBLIC_ vars are injected by CDK into Amplify env vars.
+            # We echo them into .env.production so Next.js picks them up at
+            # build time (static generation, generateStaticParams, etc.)
+            - |
+              cat >> .env.production <<ENV
+              NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+              NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+              NEXT_PUBLIC_CDN_URL=$NEXT_PUBLIC_CDN_URL
+              NEXT_PUBLIC_USER_POOL_ID=$NEXT_PUBLIC_USER_POOL_ID
+              NEXT_PUBLIC_USER_POOL_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_CLIENT_ID
+              ENV
+
+            # ── Sync S3 content/ → src/content/ ─────────────────────────────
+            # S3_BUCKET_NAME is injected by CDK into Amplify env vars.
+            # The Amplify build role has been granted s3:ListBucket (content/*)
+            # and s3:GetObject (content/*) by the CDK bucket policy.
+            - mkdir -p src/content
+            - aws s3 sync s3://$S3_BUCKET_NAME/content src/content --delete --region $REGION
+
+        build:
+          commands:
+            - export BUN_INSTALL="$HOME/.bun"
+            - export PATH="$BUN_INSTALL/bin:$PATH"
+            - bun run build
+
+      artifacts:
+        baseDirectory: .next
+        files:
+          - "**/*"
+
+      cache:
+        paths:
+          - .next/cache/**/*
+          - ~/.bun/install/cache/**/*
+
+    appRoot: frontend
