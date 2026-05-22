@@ -27,7 +27,7 @@ export interface ExtendedItem extends ContentItem {
   }[];
 }
 
-export type FilterMap = Partial<Record<string, string[]}>;
+export type FilterMap = Partial<Record<string, string[]>>;
 
 
 export interface ContentRegistryEntry {
