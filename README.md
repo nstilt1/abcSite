@@ -61,7 +61,7 @@ cdk deploy \
 --context githubBranch=master \
 --context githubTokenSsmPath=/abc/github-token
 
-# Get the build role name
+# Get the build role name and app id
 APP_ID=$(aws cloudformation describe-stacks --stack-name SiteStack \
   --query "Stacks[0].Outputs[?OutputKey=='AmplifyAppId'].OutputValue" \
   --output text)
@@ -80,5 +80,5 @@ cdk deploy \
 --context githubRepo=nstilt1/abcSite \
 --context githubBranch=master \
 --context githubTokenSsmPath=/abc/github-token \
---context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/abc-amplifyconsole-backend-role
+--context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/SiteStack-AmplifyAppRole0364E92A-NLGEpz0kwvYl
 ```
