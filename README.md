@@ -62,7 +62,14 @@ cdk deploy \
 --context githubTokenSsmPath=/abc/github-token
 
 # Get the build role name
-aws iam list-roles --query "Roles[?contains(RoleName,'amplifyconsole')].RoleName"
+APP_ID=$(aws cloudformation describe-stacks --stack-name SiteStack \
+  --query "Stacks[0].Outputs[?OutputKey=='AmplifyAppId'].OutputValue" \
+  --output text)
+
+AMPLIFY_ROLE=$(aws amplify get-app --app-id $APP_ID \
+  --query "app.iamServiceRoleArn" \
+  --output text)
+echo $AMPLIFY_ROLE
 
 # Deploy again with the build role specified:
 cdk deploy \
