@@ -2,6 +2,7 @@ import GalleryList from "@/components/content/GalleryList"
 import FilterBar from "@/components/content/FilterBar"
 import { getAllProducts, getAllDownloads } from "@/lib/content"
 import { ContentItem } from "@/lib/content-types"
+import { Suspense } from "react";
 
 export default function ShopPage() {
   const products = getAllProducts();
@@ -20,19 +21,21 @@ export default function ShopPage() {
         Explore our software licenses and physical products.
       </p>
 
-      <FilterBar itemsForOptions={allShopItems} />
+      <Suspense>
+        <FilterBar itemsForOptions={allShopItems} />
 
-      <div className="mt-12 space-y-12">
-        <section>
-          <h2 className="text-2xl font-medium mb-4">Software</h2>
-          <GalleryList collection="downloads" items={softwareItems} />
-        </section>
+        <div className="mt-12 space-y-12">
+          <section>
+            <h2 className="text-2xl font-medium mb-4">Software</h2>
+            <GalleryList collection="downloads" items={softwareItems} />
+          </section>
 
-        <section>
-          <h2 className="text-2xl font-medium mb-4">Products</h2>
-          <GalleryList collection="products" items={physicalItems} />
-        </section>
-      </div>
+          <section>
+            <h2 className="text-2xl font-medium mb-4">Products</h2>
+            <GalleryList collection="products" items={physicalItems} />
+          </section>
+        </div>
+      </Suspense>
     </main>
   )
 }

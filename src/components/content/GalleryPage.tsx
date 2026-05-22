@@ -1,6 +1,7 @@
 import GalleryList from "@/components/content/GalleryList"
 import FilterBar from "@/components/content/FilterBar"
 import { ContentItem } from "@/lib/content-types"
+import { Suspense } from "react";
 
 interface GalleryPageProps {
   title: string;
@@ -15,8 +16,10 @@ export default function GalleryPage({ title, subtitle, collection, items }: Gall
       <h1 className="text-3xl font-semibold">{title}</h1>
       {subtitle && <p className="mt-2 text-muted-foreground">{subtitle}</p>}
 
-      <FilterBar itemsForOptions={items} />
-      <GalleryList collection={collection} items={items} />
+      <Suspense>
+        <FilterBar itemsForOptions={items} />
+        <GalleryList collection={collection} items={items} />
+      </Suspense>
     </main>
   )
 }
