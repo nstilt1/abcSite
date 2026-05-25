@@ -42,7 +42,7 @@ function guessExt(file: File): string {
 
 async function getAccessToken(): Promise<string> {
   const session = await fetchAuthSession();
-  const token = session.tokens?.accessToken?.toString();
+  const token = session.tokens?.idToken?.toString();
   if (!token) throw new Error("No access token — are you signed in?");
   return token;
 }

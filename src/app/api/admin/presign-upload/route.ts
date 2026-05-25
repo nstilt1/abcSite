@@ -42,7 +42,9 @@ export async function POST(request: NextRequest) {
     cache: "no-store",
   });
 
+  console.log("Upstream presign response status:", upstreamResponse.status);
   const responseText = await upstreamResponse.text();
+  console.log("Upstream presign response body:", responseText);
 
   return new NextResponse(responseText, {
     status: upstreamResponse.status,
