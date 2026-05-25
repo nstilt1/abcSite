@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { fetchAuthSession } from "aws-amplify/auth";
 import {
   Dialog, DialogContent, DialogFooter,
@@ -70,6 +70,7 @@ async function requestPresignedUpload(body: {
 function isImage(file: File) { return file.type.startsWith("image/"); }
 function isVideo(file: File) { return file.type.startsWith("video/"); }
 
+
 export default function MediaPage() {
   const [open, setOpen]           = useState(false);
   const [file, setFile]           = useState<File | null>(null);
@@ -80,36 +81,79 @@ export default function MediaPage() {
   const [uploadedUrl, setUploadedUrl] = useState("");
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState("");
+  const filePickerOpenRef = useRef(false);
 
   const activeFolder = useCustom ? customFolder : folder;
   const accept       = FOLDER_ACCEPT[activeFolder] ?? "*/*";
   const canUpload    = useMemo(() => !!file && !busy && !!activeFolder, [file, busy, activeFolder]);
 
   async function onUpload() {
-    if (!file) return;
+    if (!file) { console.log("STOP: no file"); return; }
     setBusy(true); setError(""); setStatus(""); setUploadedUrl("");
+    
     try {
+      console.log("STEP 1: getting access token");
+      setStatus("Getting access token...");
+      
+      const accessToken = await getAccessToken();
+      console.log("STEP 2: got token, length:", accessToken.length);
       setStatus("Requesting presigned URL...");
-      const presign = await requestPresignedUpload({
-        folder:      activeFolder,
-        filename:    sanitizeFilename(file.name),
-        contentType: file.type || "application/octet-stream",
-        ext:         guessExt(file),
+      
+      console.log("STEP 3: calling presign route with folder:", activeFolder, "file:", file.name);
+      
+      const response = await fetch("/api/admin/presign-upload", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json", 
+          Authorization: `Bearer ${accessToken}` 
+        },
+        body: JSON.stringify({
+          folder:      activeFolder,
+          filename:    sanitizeFilename(file.name),
+          contentType: file.type || "application/octet-stream",
+          ext:         guessExt(file),
+        }),
       });
-      setStatus("Uploading...");
+      
+      console.log("STEP 4: presign response status:", response.status);
+      const text = await response.text();
+      console.log("STEP 5: presign response body:", text);
+      
+      if (!response.ok) {
+        throw new Error(`Presign failed: ${response.status} — ${text}`);
+      }
+      
+      const presign = JSON.parse(text) as Partial<PresignResponse>;
+      console.log("STEP 6: presign parsed:", presign);
+      
+      if (typeof presign.uploadUrl !== "string" || typeof presign.key !== "string" || typeof presign.publicUrl !== "string") {
+        throw new Error("Presign response missing uploadUrl, key, or publicUrl.");
+      }
+      
+      setStatus("Uploading to S3...");
+      console.log("STEP 7: uploading to S3 URL:", presign.uploadUrl?.substring(0, 80) + "...");
+      
       const put = await fetch(presign.uploadUrl, {
         method:  "PUT",
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body:    file,
       });
+      
+      console.log("STEP 8: S3 PUT response status:", put.status);
+      
       if (!put.ok) {
         const t = await put.text().catch(() => "");
-        throw new Error(`S3 upload failed: ${put.status} ${put.statusText}${t ? ` — ${t}` : ""}`);
+        throw new Error(`S3 upload failed: ${put.status} — ${t}`);
       }
+      
       setStatus(`Done. S3 key: ${presign.key}`);
-      setUploadedUrl(presign.publicUrl);
+      setUploadedUrl(presign.publicUrl!);
+      console.log("STEP 9: complete, public URL:", presign.publicUrl);
+      
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("UPLOAD ERROR:", msg);
+      setError(msg);
     } finally {
       setBusy(false);
     }
@@ -124,12 +168,35 @@ export default function MediaPage() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <h1 className="text-3xl font-semibold">Media</h1>
 
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && filePickerOpenRef.current) {
+            filePickerOpenRef.current = false;
+            return;
+          }
+
+          if (!nextOpen && !busy) {
+            setOpen(false);
+            reset();
+            return;
+          }
+
+          if (nextOpen) {
+            setOpen(true);
+          }
+        }}
+      >
         <DialogTrigger asChild>
           <Button>Upload file</Button>
         </DialogTrigger>
 
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent 
+          className="sm:max-w-[520px]"
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Upload file</DialogTitle>
           </DialogHeader>
@@ -176,7 +243,19 @@ export default function MediaPage() {
               <Input
                 type="file"
                 accept={accept}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onPointerDown={() => {
+                  filePickerOpenRef.current = true;
+                }}
+                onClick={() => {
+                  filePickerOpenRef.current = true;
+                }}
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] ?? null);
+
+                  window.setTimeout(() => {
+                    filePickerOpenRef.current = false;
+                  }, 250);
+                }}
                 disabled={busy}
               />
               {file && (
@@ -206,8 +285,20 @@ export default function MediaPage() {
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)} disabled={busy}>Close</Button>
-            <Button onClick={onUpload} disabled={!canUpload}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
+              disabled={busy}
+            >
+              Close
+            </Button>
+            <Button 
+              onClick={() => { console.log("Upload button clicked, file:", file?.name, "folder:", activeFolder, "canUpload:", canUpload); onUpload(); }} 
+              disabled={!canUpload}
+            >
               {busy ? "Uploading..." : "Upload"}
             </Button>
           </DialogFooter>

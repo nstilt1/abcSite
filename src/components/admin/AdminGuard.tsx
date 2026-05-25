@@ -4,6 +4,7 @@ import { Authenticator, useTheme, View, Image, Text, Heading, Button, useAuthent
 import "@aws-amplify/ui-react/styles.css";
 import { useAuthState } from "@/hooks/useAuthState";
 import { Button as ShadButton } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 type Props = {
   children: React.ReactNode;
@@ -259,38 +260,54 @@ const formFields = {
 
 export function AdminGuard({ children }: Props) {
   const auth = useAuthState();
+  const [hasResolvedOnce, setHasResolvedOnce] = useState(false);
 
-  if (auth.loading) {
+  useEffect(() => {
+    if (!auth.loading) {
+      setHasResolvedOnce(true);
+    }
+  }, [auth.loading]);
+
+  if (!hasResolvedOnce && auth.loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-sm text-muted-foreground">Checking account…</div>
+        <div className="text-sm text-muted-foreground">
+          Checking account…
+        </div>
       </div>
     );
   }
 
-if (!auth.isSignedIn) {
-  return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-xl rounded-xl border bg-card p-6 shadow-sm">
-        <h1 className="mb-2 text-xl font-semibold">Admin login</h1>
-        <p className="mb-6 text-sm text-muted-foreground">
-          Sign in with an admin account to access the admin area.
-        </p>
+  if (!auth.isSignedIn) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-xl rounded-xl border bg-card p-6 shadow-sm">
+          <h1 className="mb-2 text-xl font-semibold">Admin login</h1>
 
-        <Authenticator hideSignUp className="abc-authenticator" />
+          <p className="mb-6 text-sm text-muted-foreground">
+            Sign in with an admin account to access the admin area.
+          </p>
+
+          <Authenticator
+            hideSignUp
+            className="abc-authenticator"
+          />
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   if (!auth.isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
         <div className="max-w-lg rounded-xl border bg-card p-6 shadow-sm">
           <h1 className="text-xl font-semibold">Admins only</h1>
+
           <p className="mt-2 text-sm text-muted-foreground">
-            Admins only, click here to sign out and sign in with another account.
+            Admins only, click here to sign out and sign in with another
+            account.
           </p>
+
           <ShadButton
             className="mt-4"
             onClick={() => {

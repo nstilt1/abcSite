@@ -9,7 +9,8 @@
     "CONTENT_BUCKET": { "fromStack": "bucketName" },
     "S3_BUCKET_REGION": { "fromStack": "region" },
     "CLOUDFRONT_BASE_URL": { "fromStack": "cdnUrl" },
-    "RUST_LOG": "info"
+    "RUST_LOG": "info",
+    "ALLOWED_ORIGINS": { "value": "https://alteredbrainchemistry.com,https://dev.alteredbrainchemistry.com" }
   },
 
   "s3Access": {

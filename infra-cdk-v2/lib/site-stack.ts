@@ -227,9 +227,10 @@ export class SiteStack extends cdk.Stack {
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
       },
       additionalBehaviors: {
-        "/thumbs/*": { origin: s3Origin, viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED },
-        "/images/*": { origin: s3Origin, viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED },
+        "/thumbs/*":    { origin: s3Origin, viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED },
+        "/images/*":    { origin: s3Origin, viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED },
         "/downloads/*": { origin: s3Origin, viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED },
+        "/media/*":     { origin: s3Origin, viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS, cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED },
       },
     });
 
@@ -365,7 +366,6 @@ export class SiteStack extends cdk.Stack {
         repository: props.githubRepo.split("/")[1],
         oauthToken: githubToken,
       }),
-      platform: amplify.Platform.WEB_COMPUTE,
       environmentVariables: {
         NEXT_PUBLIC_API_BASE_URL: this.api.url,
         NEXT_PUBLIC_SITE_URL: `https://${siteDomain}`,
