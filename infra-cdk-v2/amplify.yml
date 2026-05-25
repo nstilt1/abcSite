@@ -20,6 +20,7 @@ frontend:
           NEXT_PUBLIC_CDN_URL=$NEXT_PUBLIC_CDN_URL
           NEXT_PUBLIC_USER_POOL_ID=$NEXT_PUBLIC_USER_POOL_ID
           NEXT_PUBLIC_USER_POOL_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_CLIENT_ID
+          PRESIGN_URL=$PRESIGN_URL
           ENV
 
         # ── Sync S3 content/ → src/content/ ───────────────────────────────────

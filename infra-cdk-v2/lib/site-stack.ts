@@ -366,6 +366,7 @@ export class SiteStack extends cdk.Stack {
         repository: props.githubRepo.split("/")[1],
         oauthToken: githubToken,
       }),
+      platform: amplify.Platform.WEB_COMPUTE,
       environmentVariables: {
         NEXT_PUBLIC_API_BASE_URL: this.api.url,
         NEXT_PUBLIC_SITE_URL: `https://${siteDomain}`,
