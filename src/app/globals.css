@@ -457,6 +457,8 @@ body {
   --amplify-components-checkbox-checked-background-color: #4a90e2;
   --amplify-components-checkbox-checked-border-color: #4a90e2;
   --amplify-components-button-outlined-error-color: #ff6363;
+  --amplify-components-heading-color: #dfdfdf;
+  --amplify-components-text-color: #dfdfdf;
 }
 
 .dark .abc-authenticator [data-amplify-fieldcontrol] input[type="password"] {

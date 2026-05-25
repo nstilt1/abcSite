@@ -11,9 +11,10 @@ const components = {
           <Authenticator.SignUp.FormFields />
 
           <CheckboxField
-            name="custom:newsletter_opt_in"
+            name="custom:newsletterOptIn"
             label="Join the mailing list"
-            value="false"
+            value="true"
+            defaultChecked={false}
             className="newsletter-opt-in"
           />
         </>
