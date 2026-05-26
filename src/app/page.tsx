@@ -1,3 +1,6 @@
+"use client"
+
+import { HeroVideo } from "@/components/HeroVideo";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -66,13 +69,7 @@ export default function Home() {
     <div className="flex flex-col">
       <section className="relative flex min-h-[560px] w-full items-center overflow-hidden md:min-h-[720px]">
         <div className="absolute inset-0">
-          <Image
-            src="/website-pic-3.jpg"
-            alt="Abstract Altered Brain Chemistry hero background"
-            fill
-            priority
-            className="hero-mobile-image object-cover md:rotate-0 md:scale-100"
-          />
+          <HeroVideo />
           <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/55 to-black/80 md:bg-gradient-to-r md:from-black/75 md:via-black/45 md:to-black/25" />
         </div>
 
@@ -161,6 +158,7 @@ export default function Home() {
               src="/abc_brain_s.png"
               alt="Altered Brain Chemistry brain"
               fill
+              sizes="(max-width: 768px) 160px, 220px"
               className="object-contain abc-brain-rotate"
             />
           </div>

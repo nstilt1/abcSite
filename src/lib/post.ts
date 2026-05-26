@@ -14,7 +14,7 @@ export async function postToApi<T = unknown>(
 ): Promise<T> {
   const session = await fetchAuthSession();
 
-  const accessToken = session.tokens?.accessToken?.toString();
+  const accessToken = session.tokens?.idToken?.toString();
 
   if (!accessToken) {
     throw new Error("No access token available (user not signed in?)");
