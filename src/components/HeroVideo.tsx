@@ -139,8 +139,8 @@ export function HeroVideo() {
 
       vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
 
-      vs.animation_duration = 50;
-      vs.fps = 30;
+      vs.animation_duration = 100;
+      vs.fps = 24;
       vs.rotation_range = 45;
       vs.rotation_cycles = 1;
       vs.rotation_start_offset = 0;
