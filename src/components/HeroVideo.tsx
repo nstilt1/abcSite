@@ -69,13 +69,22 @@ export function HeroVideo() {
       }
 
       function fitCanvas() {
-        const dpr = window.devicePixelRatio ?? 1;
-        const rect = canvas!.getBoundingClientRect();
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
-        canvas!.width = Math.min(Math.round(rect.width * dpr), 1920);
-        canvas!.height = Math.min(Math.round(rect.height * dpr), 1080);
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
 
-        debugLog(`fitCanvas → ${canvas!.width}×${canvas!.height} (dpr=${dpr})`);
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+
+        const rawWidth = Math.max(1, Math.round(rect.width * dpr));
+        const rawHeight = Math.max(1, Math.round(rect.height * dpr));
+
+        const scale = Math.min(maxWidth / rawWidth, maxHeight / rawHeight, 1);
+
+        canvas.width = Math.max(1, Math.round(rawWidth * scale));
+        canvas.height = Math.max(1, Math.round(rawHeight * scale));
       }
 
       fitCanvas();
@@ -222,7 +231,14 @@ export function HeroVideo() {
       aria-label="Abstract Altered Brain Chemistry hero background"
       aria-hidden="true"
       style={{ pointerEvents: "none" }}
-      className="absolute left-0 top-0 h-full w-full"
+      className="
+        absolute left-1/2 top-1/2
+        aspect-video
+        h-full min-h-full min-w-full w-auto
+        -translate-x-1/2 -translate-y-1/2
+        object-cover
+        max-md:h-screen max-md:w-auto max-md:rotate-90
+      "
     />
   );
 }
