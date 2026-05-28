@@ -69,22 +69,8 @@ export function HeroVideo() {
       }
 
       function fitCanvas() {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-
-        const maxWidth = 1920;
-        const maxHeight = 1080;
-
-        const rawWidth = Math.max(1, Math.round(rect.width * dpr));
-        const rawHeight = Math.max(1, Math.round(rect.height * dpr));
-
-        const scale = Math.min(maxWidth / rawWidth, maxHeight / rawHeight, 1);
-
-        canvas.width = Math.max(1, Math.round(rawWidth * scale));
-        canvas.height = Math.max(1, Math.round(rawHeight * scale));
+        canvas!.width = 1920;
+        canvas!.height = 1080;
       }
 
       fitCanvas();
@@ -148,7 +134,7 @@ export function HeroVideo() {
 
       vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
 
-      vs.animation_duration = 115;
+      vs.animation_duration = 103;
       vs.fps = 24;
       vs.rotation_range = 45;
       vs.rotation_cycles = 1;
@@ -226,19 +212,33 @@ export function HeroVideo() {
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-label="Abstract Altered Brain Chemistry hero background"
-      aria-hidden="true"
-      style={{ pointerEvents: "none" }}
-      className="
-        absolute left-1/2 top-1/2
-        aspect-video
-        h-full min-h-full min-w-full w-auto
-        -translate-x-1/2 -translate-y-1/2
-        object-cover
-        max-md:h-screen max-md:w-auto max-md:rotate-90
-      "
-    />
+    <>
+      <img
+        src="https://hephaestus.alteredbrainchemistry.com/images/kaleidomo-first-frame.jpg"
+        alt=""
+        aria-hidden="true"
+        className="
+          absolute left-1/2 top-1/2
+          aspect-video h-full min-h-full min-w-full w-auto
+          -translate-x-1/2 -translate-y-1/2
+          object-cover
+          max-md:h-screen max-md:w-auto max-md:rotate-90
+        "
+      />
+      <canvas
+        ref={canvasRef}
+        aria-label="Abstract Altered Brain Chemistry hero background"
+        aria-hidden="true"
+        style={{ pointerEvents: "none" }}
+        className="
+          absolute left-1/2 top-1/2
+          aspect-video
+          h-full min-h-full min-w-full w-auto
+          -translate-x-1/2 -translate-y-1/2
+          object-cover
+          max-md:h-screen max-md:w-auto max-md:rotate-90
+        "
+      />
+    </>
   );
 }
