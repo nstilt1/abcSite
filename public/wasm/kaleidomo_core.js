@@ -98,6 +98,33 @@ export class LiveKaleidoscopeEngine {
     stop_animation() {
         wasm.livekaleidoscopeengine_stop_animation(this.__wbg_ptr);
     }
+    /**
+     * @param {number} count
+     * @param {number} offset_x
+     * @param {number} offset_y
+     * @param {number} zoom
+     * @param {number} tile_count
+     * @param {number} triangle_center_x
+     * @param {number} triangle_center_y
+     * @param {number} triangle_rotation_rad
+     * @param {number} kaleido_type_idx
+     * @param {number} hue_rotation
+     * @param {WasmVideoSettings} video_settings
+     */
+    update_animation_settings(count, offset_x, offset_y, zoom, tile_count, triangle_center_x, triangle_center_y, triangle_rotation_rad, kaleido_type_idx, hue_rotation, video_settings) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(video_settings, WasmVideoSettings);
+            wasm.livekaleidoscopeengine_update_animation_settings(retptr, this.__wbg_ptr, count, offset_x, offset_y, zoom, tile_count, triangle_center_x, triangle_center_y, triangle_rotation_rad, kaleido_type_idx, hue_rotation, video_settings.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
 }
 if (Symbol.dispose) LiveKaleidoscopeEngine.prototype[Symbol.dispose] = LiveKaleidoscopeEngine.prototype.free;
 
@@ -1347,7 +1374,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_10310(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_10314(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -2300,12 +2327,12 @@ function __wbg_get_imports() {
         }, arguments); },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { dtor_idx: 4, function: Function { arguments: [F64], shim_idx: 14, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_706, __wasm_bindgen_func_elem_709);
+            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_708, __wasm_bindgen_func_elem_711);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { dtor_idx: 421, function: Function { arguments: [Externref], shim_idx: 422, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_2240, __wasm_bindgen_func_elem_2242);
+            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_2244, __wasm_bindgen_func_elem_2246);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000003: function(arg0) {
@@ -2367,16 +2394,16 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_2242(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_2242(arg0, arg1, addHeapObject(arg2));
+function __wasm_bindgen_func_elem_2246(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_2246(arg0, arg1, addHeapObject(arg2));
 }
 
-function __wasm_bindgen_func_elem_10310(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_10310(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_10314(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_10314(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_709(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_709(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_711(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_711(arg0, arg1, arg2);
 }
 
 

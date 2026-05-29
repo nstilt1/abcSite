@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { HeroKaleidoControls } from "@/app/page";
 
 import type {
   LiveKaleidoscopeEngine,
@@ -19,9 +20,15 @@ function debugLog(...args: unknown[]) {
   if (DEBUG) console.log("[HeroKaleido]", ...args);
 }
 
-export function HeroVideo() {
+type HeroVideoProps = {
+  controls: HeroKaleidoControls;
+};
+
+export function HeroVideo({ controls }: HeroVideoProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const engineRef = useRef<LiveKaleidoscopeEngine | null>(null);
+  const vsRef = useRef<WasmVideoSettings | null>(null);
   const [useVideoFallback, setUseVideoFallback] = useState(false);
 
   useEffect(() => {
@@ -106,6 +113,7 @@ export function HeroVideo() {
         engine = await new (mod.LiveKaleidoscopeEngine as typeof LiveKaleidoscopeEngine)(
           canvas,
         );
+        engineRef.current = engine;
       } catch (e) {
         activateVideoFallback(e);
         return;
@@ -134,7 +142,10 @@ export function HeroVideo() {
 
       vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
 
-      vs.animation_duration = 103;
+      vsRef.current = vs;
+
+      vs.animation_duration = controls.animationDuration;
+      vs.hue_range = 0;
       vs.fps = 24;
       vs.rotation_range = 45;
       vs.rotation_cycles = 1;
@@ -159,11 +170,11 @@ export function HeroVideo() {
           0,
           0.069,
           1.1,
-          515.1039592844847,
-          755.3734001945962,
-          6.22,
+          controls.triangleCenterX,
+          controls.triangleCenterY,
+          controls.triangleRotationRad,
           3,
-          308,
+          controls.hueRotation,
           vs,
         );
       } catch (e) {
@@ -192,6 +203,34 @@ export function HeroVideo() {
       vs?.free();
     };
   }, [useVideoFallback]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    const vs = vsRef.current;
+
+    if (!engine || !vs || useVideoFallback) return;
+
+    vs.animation_duration = controls.animationDuration;
+    vs.hue_range = 0;
+
+    try {
+      engine.update_animation_settings(
+        24,
+        354,
+        0,
+        0.069,
+        1.1,
+        controls.triangleCenterX,
+        controls.triangleCenterY,
+        controls.triangleRotationRad,
+        3,
+        controls.hueRotation,
+        vs,
+      );
+    } catch (e) {
+      debugLog("Failed to update hero controls:", e);
+    }
+  }, [controls, useVideoFallback]);
 
   if (useVideoFallback) {
     return (

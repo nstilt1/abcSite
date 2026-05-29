@@ -3,6 +3,12 @@
 import { HeroVideo } from "@/components/HeroVideo";
 import Image from "next/image";
 import Link from "next/link";
+import { Settings } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
+import useLocalStorage from "@/hooks/useLocalStorage";
 
 type ShowcaseSectionProps = {
   title: string;
@@ -64,12 +70,154 @@ function ShowcaseSection({
   );
 }
 
+export type HeroKaleidoControls = {
+  animationDuration: number;
+  hueRotation: number;
+  triangleCenterX: number;
+  triangleCenterY: number;
+  triangleRotationRad: number;
+};
+
+function orientationToHeroParams(value: number) {
+  const leftX = 515.1039592844847;
+  const rightX = 1547;
+  const centerY = 755.3734001945962;
+
+  const centerX = (leftX + rightX) / 2;
+  const radius = (rightX - leftX) / 2;
+
+  const angleShift = 0;
+  const circleAngle = Math.PI + value * Math.PI * 2 + angleShift;
+
+  const triangleCenterX = centerX + Math.cos(circleAngle) * radius;
+  const triangleCenterY = centerY + Math.sin(circleAngle) * radius;
+
+  const leftSideAngle = Math.PI;
+  const desiredLeftRotation = 6.22;
+
+  const rawTriangleRotationRad =
+    desiredLeftRotation + (circleAngle - leftSideAngle);
+
+  const triangleRotationRad =
+    ((rawTriangleRotationRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+
+  return {
+    triangleCenterX,
+    triangleCenterY,
+    triangleRotationRad,
+  };
+}
+
+const DEFAULT_HERO_SETTINGS = {
+  speed: durationToSpeedSlider(100),
+  colorShift: 308,
+  orientation: 0,
+};
+
+function speedSliderToDuration(value: number) {
+  const minSlider = 1;
+  const maxSlider = 5;
+  const maxDuration = 160;
+  const minDuration = 5;
+
+  const t = (value - minSlider) / (maxSlider - minSlider);
+
+  return maxDuration * Math.pow(minDuration / maxDuration, t);
+}
+
+function durationToSpeedSlider(duration: number) {
+  const minSlider = 1;
+  const maxSlider = 5;
+  const maxDuration = 160;
+  const minDuration = 5;
+
+  const t = Math.log(duration / maxDuration) / Math.log(minDuration / maxDuration);
+
+  return minSlider + t * (maxSlider - minSlider);
+}
+
 export default function Home() {
+  const DEFAULT_HERO_SPEED = durationToSpeedSlider(100);
+  const DEFAULT_HERO_COLOR = 308;
+  const DEFAULT_HERO_ORIENTATION = 0;
+  const [speed, setSpeed, heroSpeedLoaded] = useLocalStorage("heroSpeed", DEFAULT_HERO_SPEED);
+  const [colorShift, setColorShift, heroColorLoaded] = useLocalStorage("heroColor", DEFAULT_HERO_COLOR);
+  const [orientation, setOrientation, heroOrientationLoaded] = useLocalStorage("heroOrientation", DEFAULT_HERO_ORIENTATION);
+
+  const heroSettingsLoaded = heroSpeedLoaded && heroColorLoaded && heroOrientationLoaded;
+
+  function resetHeroSettings() {
+    setSpeed(DEFAULT_HERO_SETTINGS.speed);
+    setColorShift(DEFAULT_HERO_SETTINGS.colorShift);
+    setOrientation(DEFAULT_HERO_SETTINGS.orientation);
+  }
+
+  const heroControls = useMemo<HeroKaleidoControls>(() => {
+    const orientationParams = orientationToHeroParams(orientation / 100);
+
+    return {
+      animationDuration: speedSliderToDuration(speed),
+      hueRotation: colorShift,
+      ...orientationParams,
+    };
+  }, [speed, colorShift, orientation]);
   return (
     <div className="flex flex-col">
       <section className="relative flex min-h-[560px] w-full items-center overflow-hidden md:min-h-[720px]">
         <div className="absolute inset-0">
-          <HeroVideo />
+          {heroSettingsLoaded && <HeroVideo controls={heroControls} />}
+
+          <div className="absolute left-4 top-4 z-20">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="rounded-full bg-black/45 text-white backdrop-blur hover:bg-black/65"
+                >
+                  <Settings className="h-5 w-5" />
+                  <span className="sr-only">Open hero settings</span>
+                </Button>
+              </SheetTrigger>
+
+              <SheetContent side="left" className="w-[320px] border-white/10 bg-black/90 text-white">
+                <div className="space-y-8 pt-8">
+                  <div>
+                    <div className="mb-3 flex justify-between text-sm">
+                      <span>Speed</span>
+                      <span>{speedSliderToDuration(speed).toFixed(1)}s</span>
+                    </div>
+                    <Slider value={[speed]} min={1} max={5} step={0.01} onValueChange={([v]) => setSpeed(v)} />
+                  </div>
+
+                  <div>
+                    <div className="mb-3 flex justify-between text-sm">
+                      <span>Color shift</span>
+                      <span>{colorShift}°</span>
+                    </div>
+                    <Slider value={[colorShift]} min={0} max={360} step={1} onValueChange={([v]) => setColorShift(v)} />
+                  </div>
+
+                  <div>
+                    <div className="mb-3 flex justify-between text-sm">
+                      <span>Orientation</span>
+                      <span>{orientation}%</span>
+                    </div>
+                    <Slider value={[orientation]} min={0} max={100} step={1} onValueChange={([v]) => setOrientation(v)} />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-white/10 bg-white/5 text-white hover:bg-white/10"
+                    onClick={resetHeroSettings}
+                  >
+                    Reset defaults
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
           <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/55 to-black/80 md:bg-gradient-to-r md:from-black/75 md:via-black/45 md:to-black/25" />
         </div>
 

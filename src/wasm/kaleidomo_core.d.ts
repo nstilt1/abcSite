@@ -30,6 +30,7 @@ export class LiveKaleidoscopeEngine {
      * Cancel the animation loop (idempotent).
      */
     stop_animation(): void;
+    update_animation_settings(count: number, offset_x: number, offset_y: number, zoom: number, tile_count: number, triangle_center_x: number, triangle_center_y: number, triangle_rotation_rad: number, kaleido_type_idx: number, hue_rotation: number, video_settings: WasmVideoSettings): void;
 }
 
 /**
@@ -105,6 +106,7 @@ export interface InitOutput {
     readonly livekaleidoscopeengine_new: (a: number) => number;
     readonly livekaleidoscopeengine_start_animation: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
     readonly livekaleidoscopeengine_stop_animation: (a: number) => void;
+    readonly livekaleidoscopeengine_update_animation_settings: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
     readonly wasmvideosettings_get_hue_fn: (a: number, b: number) => void;
     readonly wasmvideosettings_get_rotation_fn: (a: number, b: number) => void;
     readonly wasmvideosettings_get_zoom_fn: (a: number, b: number) => void;
@@ -112,11 +114,11 @@ export interface InitOutput {
     readonly wasmvideosettings_set_hue_fn: (a: number, b: number, c: number) => void;
     readonly wasmvideosettings_set_rotation_fn: (a: number, b: number, c: number) => void;
     readonly wasmvideosettings_set_zoom_fn: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_706: (a: number, b: number) => void;
-    readonly __wasm_bindgen_func_elem_2240: (a: number, b: number) => void;
-    readonly __wasm_bindgen_func_elem_10310: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_2242: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_709: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_708: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_2244: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_711: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_10314: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_2246: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;
