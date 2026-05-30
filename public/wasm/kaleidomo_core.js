@@ -191,6 +191,27 @@ export class WasmVideoSettings {
     /**
      * @returns {number}
      */
+    get orientation_cycles() {
+        const ret = wasm.__wbg_get_wasmvideosettings_orientation_cycles(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get orientation_range() {
+        const ret = wasm.__wbg_get_wasmvideosettings_orientation_range(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get orientation_start_offset() {
+        const ret = wasm.__wbg_get_wasmvideosettings_orientation_start_offset(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
     get rotation_cycles() {
         const ret = wasm.__wbg_get_wasmvideosettings_rotation_cycles(this.__wbg_ptr);
         return ret;
@@ -272,6 +293,24 @@ export class WasmVideoSettings {
     /**
      * @param {number} arg0
      */
+    set orientation_cycles(arg0) {
+        wasm.__wbg_set_wasmvideosettings_orientation_cycles(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set orientation_range(arg0) {
+        wasm.__wbg_set_wasmvideosettings_orientation_range(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set orientation_start_offset(arg0) {
+        wasm.__wbg_set_wasmvideosettings_orientation_start_offset(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
     set rotation_cycles(arg0) {
         wasm.__wbg_set_wasmvideosettings_rotation_cycles(this.__wbg_ptr, arg0);
     }
@@ -315,6 +354,25 @@ export class WasmVideoSettings {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             wasm.wasmvideosettings_get_hue_fn(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get_orientation_fn() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.wasmvideosettings_get_orientation_fn(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             deferred1_0 = r0;
@@ -376,6 +434,14 @@ export class WasmVideoSettings {
         const ptr0 = passStringToWasm0(f, wasm.__wbindgen_export, wasm.__wbindgen_export2);
         const len0 = WASM_VECTOR_LEN;
         wasm.wasmvideosettings_set_hue_fn(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @param {string} f
+     */
+    set_orientation_fn(f) {
+        const ptr0 = passStringToWasm0(f, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.wasmvideosettings_set_orientation_fn(this.__wbg_ptr, ptr0, len0);
     }
     /**
      * @param {string} f
@@ -1374,7 +1440,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_10314(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_10325(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -2327,12 +2393,12 @@ function __wbg_get_imports() {
         }, arguments); },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { dtor_idx: 4, function: Function { arguments: [F64], shim_idx: 14, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_708, __wasm_bindgen_func_elem_711);
+            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_710, __wasm_bindgen_func_elem_713);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { dtor_idx: 421, function: Function { arguments: [Externref], shim_idx: 422, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_2244, __wasm_bindgen_func_elem_2246);
+            const ret = makeMutClosure(arg0, arg1, wasm.__wasm_bindgen_func_elem_2255, __wasm_bindgen_func_elem_2257);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000003: function(arg0) {
@@ -2394,16 +2460,16 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_2246(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_2246(arg0, arg1, addHeapObject(arg2));
+function __wasm_bindgen_func_elem_2257(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_2257(arg0, arg1, addHeapObject(arg2));
 }
 
-function __wasm_bindgen_func_elem_10314(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_10314(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_10325(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_10325(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
-function __wasm_bindgen_func_elem_711(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_711(arg0, arg1, arg2);
+function __wasm_bindgen_func_elem_713(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_713(arg0, arg1, arg2);
 }
 
 

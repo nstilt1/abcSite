@@ -70,12 +70,22 @@ function ShowcaseSection({
   );
 }
 
+export type ReorientationFn =
+  | "linear"
+  | "triangle"
+  | "saw"
+  | "sin"
+  | "sin2"
+  | "-cos";
+
 export type HeroKaleidoControls = {
   animationDuration: number;
   hueRotation: number;
   triangleCenterX: number;
   triangleCenterY: number;
   triangleRotationRad: number;
+  reorientationDuration: number;
+  reorientationFn: ReorientationFn;
 };
 
 function orientationToHeroParams(value: number) {
@@ -111,7 +121,8 @@ function orientationToHeroParams(value: number) {
 const DEFAULT_HERO_SETTINGS = {
   speed: durationToSpeedSlider(100),
   colorShift: 308,
-  orientation: 0,
+  reorientationSpeed: durationToSpeedSlider(100),
+  reorientationFn: "linear" as ReorientationFn,
 };
 
 function speedSliderToDuration(value: number) {
@@ -139,28 +150,40 @@ function durationToSpeedSlider(duration: number) {
 export default function Home() {
   const DEFAULT_HERO_SPEED = durationToSpeedSlider(100);
   const DEFAULT_HERO_COLOR = 308;
-  const DEFAULT_HERO_ORIENTATION = 0;
+  const DEFAULT_REORIENTATION_SPEED = 1.49;
+  const DEFAULT_REORIENTATION_FN: ReorientationFn = "linear";
+
   const [speed, setSpeed, heroSpeedLoaded] = useLocalStorage("heroSpeed", DEFAULT_HERO_SPEED);
   const [colorShift, setColorShift, heroColorLoaded] = useLocalStorage("heroColor", DEFAULT_HERO_COLOR);
-  const [orientation, setOrientation, heroOrientationLoaded] = useLocalStorage("heroOrientation", DEFAULT_HERO_ORIENTATION);
+  const [reorientationSpeed, setReorientationSpeed, heroReorientationSpeedLoaded] =
+    useLocalStorage("heroReorientationSpeed", DEFAULT_REORIENTATION_SPEED);
+  const [reorientationFn, setReorientationFn, heroReorientationFnLoaded] =
+    useLocalStorage<ReorientationFn>("heroReorientationFn", DEFAULT_REORIENTATION_FN);
 
-  const heroSettingsLoaded = heroSpeedLoaded && heroColorLoaded && heroOrientationLoaded;
+  const heroSettingsLoaded =
+    heroSpeedLoaded &&
+    heroColorLoaded &&
+    heroReorientationSpeedLoaded &&
+    heroReorientationFnLoaded;
 
   function resetHeroSettings() {
     setSpeed(DEFAULT_HERO_SETTINGS.speed);
     setColorShift(DEFAULT_HERO_SETTINGS.colorShift);
-    setOrientation(DEFAULT_HERO_SETTINGS.orientation);
+    setReorientationSpeed(DEFAULT_HERO_SETTINGS.reorientationSpeed);
+    setReorientationFn(DEFAULT_HERO_SETTINGS.reorientationFn);
   }
 
   const heroControls = useMemo<HeroKaleidoControls>(() => {
-    const orientationParams = orientationToHeroParams(orientation / 100);
+    const orientationParams = orientationToHeroParams(0);
 
     return {
       animationDuration: speedSliderToDuration(speed),
       hueRotation: colorShift,
+      reorientationDuration: speedSliderToDuration(reorientationSpeed),
+      reorientationFn,
       ...orientationParams,
     };
-  }, [speed, colorShift, orientation]);
+  }, [speed, colorShift, reorientationSpeed, reorientationFn]);
   return (
     <div className="flex flex-col">
       <section className="relative flex min-h-[560px] w-full items-center overflow-hidden md:min-h-[720px]">
@@ -201,10 +224,32 @@ export default function Home() {
 
                   <div>
                     <div className="mb-3 flex justify-between text-sm">
-                      <span>Orientation</span>
-                      <span>{orientation}%</span>
+                      <span>Reorientation speed</span>
+                      <span>{speedSliderToDuration(reorientationSpeed).toFixed(1)}s / loop</span>
                     </div>
-                    <Slider value={[orientation]} min={0} max={100} step={1} onValueChange={([v]) => setOrientation(v)} />
+                    <Slider
+                      value={[reorientationSpeed]}
+                      min={1}
+                      max={5}
+                      step={0.01}
+                      onValueChange={([v]) => setReorientationSpeed(v)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-3 block text-sm">Reorientation function</label>
+                    <select
+                      value={reorientationFn}
+                      onChange={(e) => setReorientationFn(e.target.value as ReorientationFn)}
+                      className="w-full rounded-md border border-white/10 bg-black px-3 py-2 text-sm text-white"
+                    >
+                      <option value="linear">Linear</option>
+                      <option value="triangle">Triangle</option>
+                      <option value="saw">Saw</option>
+                      <option value="sin">Sin</option>
+                      <option value="sin2">Sin²</option>
+                      <option value="-cos">-Cos</option>
+                    </select>
                   </div>
                   <Button
                     type="button"

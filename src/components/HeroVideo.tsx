@@ -20,6 +20,31 @@ function debugLog(...args: unknown[]) {
   if (DEBUG) console.log("[HeroKaleido]", ...args);
 }
 
+function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls) {
+  vs.animation_duration = controls.animationDuration;
+
+  vs.hue_range = 0;
+  vs.hue_cycles = 0;
+  vs.hue_start_offset = 0;
+  vs.set_hue_fn("-cos");
+
+  vs.rotation_range = 45;
+  vs.rotation_cycles = 1;
+  vs.rotation_start_offset = 0;
+  vs.set_rotation_fn("sin2");
+
+  vs.zoom_max = 0.79090958991783823;
+  vs.zoom_min = 0.69;
+  vs.zoom_start_offset = 0;
+  vs.num_zoom_loops = 4;
+  vs.set_zoom_fn("sin");
+
+  vs.orientation_range = 1;
+  vs.orientation_cycles = controls.animationDuration / Math.max(0.001, controls.reorientationDuration);
+  vs.orientation_start_offset = 0;
+  vs.set_orientation_fn(controls.reorientationFn);
+}
+
 type HeroVideoProps = {
   controls: HeroKaleidoControls;
 };
@@ -144,24 +169,7 @@ export function HeroVideo({ controls }: HeroVideoProps) {
 
       vsRef.current = vs;
 
-      vs.animation_duration = controls.animationDuration;
-      vs.hue_range = 0;
-      vs.fps = 24;
-      vs.rotation_range = 45;
-      vs.rotation_cycles = 1;
-      vs.rotation_start_offset = 0;
-      vs.set_rotation_fn("sin2");
-
-      vs.hue_range = 0;
-      vs.hue_cycles = 0;
-      vs.hue_start_offset = 0;
-      vs.set_hue_fn("-cos");
-
-      vs.zoom_max = 0.79090958991783823;
-      vs.zoom_min = 0.69;
-      vs.zoom_start_offset = 0;
-      vs.num_zoom_loops = 4;
-      vs.set_zoom_fn("sin");
+      applyVideoSettings(vs, controls);
 
       try {
         engine.start_animation(
@@ -210,8 +218,7 @@ export function HeroVideo({ controls }: HeroVideoProps) {
 
     if (!engine || !vs || useVideoFallback) return;
 
-    vs.animation_duration = controls.animationDuration;
-    vs.hue_range = 0;
+    applyVideoSettings(vs, controls);
 
     try {
       engine.update_animation_settings(
