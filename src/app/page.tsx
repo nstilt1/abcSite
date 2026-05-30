@@ -204,14 +204,25 @@ export default function Home() {
                 </Button>
               </SheetTrigger>
 
-              <SheetContent side="left" className="w-[320px] border-white/10 bg-black/90 text-white">
+              <SheetContent
+                side="left"
+                className="w-[min(92vw,420px)] border-white/10 bg-black/90 p-0 text-white"
+              >
+                <div className="h-full overflow-y-auto px-6 pb-6 pt-14">
                 <div className="space-y-8 pt-8">
                   <div>
                     <div className="mb-3 flex justify-between text-sm">
                       <span>Speed</span>
                       <span>{speedSliderToDuration(speed).toFixed(1)}s</span>
                     </div>
-                    <Slider value={[speed]} min={1} max={5} step={0.01} onValueChange={([v]) => setSpeed(v)} />
+                    <Slider 
+                      value={[speed]} 
+                      min={1} 
+                      max={5} 
+                      step={0.01} 
+                      onValueChange={([v]) => setSpeed(v)} 
+                      className="[&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-thumb]]:h-6 [&_[data-slot=slider-thumb]]:w-6"
+                    />
                   </div>
 
                   <div>
@@ -219,20 +230,31 @@ export default function Home() {
                       <span>Color shift</span>
                       <span>{colorShift}°</span>
                     </div>
-                    <Slider value={[colorShift]} min={0} max={360} step={1} onValueChange={([v]) => setColorShift(v)} />
+                    <Slider 
+                      value={[colorShift]} 
+                      min={0} 
+                      max={360} 
+                      step={1} 
+                      onValueChange={([v]) => setColorShift(v)} 
+                      className="[&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-thumb]]:h-6 [&_[data-slot=slider-thumb]]:w-6"
+                    />
                   </div>
 
-                  <div>
-                    <div className="mb-3 flex justify-between text-sm">
-                      <span>Reorientation speed</span>
-                      <span>{speedSliderToDuration(reorientationSpeed).toFixed(1)}s / loop</span>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="mb-4 flex items-start justify-between gap-4 text-sm">
+                      <span className="font-medium">Reorientation speed</span>
+                      <span className="shrink-0 text-zinc-300">
+                        {speedSliderToDuration(reorientationSpeed).toFixed(1)}s / loop
+                      </span>
                     </div>
+
                     <Slider
                       value={[reorientationSpeed]}
                       min={1}
                       max={5}
                       step={0.01}
                       onValueChange={([v]) => setReorientationSpeed(v)}
+                      className="[&_[data-slot=slider-track]]:h-3 [&_[data-slot=slider-thumb]]:h-6 [&_[data-slot=slider-thumb]]:w-6"
                     />
                   </div>
 
@@ -259,6 +281,7 @@ export default function Home() {
                   >
                     Reset defaults
                   </Button>
+                </div>
                 </div>
               </SheetContent>
             </Sheet>

@@ -93,6 +93,10 @@ export default function NavbarResponsive() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
 
+  const [navVisible, setNavVisible] = useState(true);
+
+  const lastScrollY = useRef(0);
+
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const resourcesMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -126,6 +130,36 @@ export default function NavbarResponsive() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleScroll() {
+      const currentScrollY = window.scrollY;
+
+      // Always show near the top
+      if (currentScrollY < 16) {
+        setNavVisible(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // Show when scrolling up
+      if (currentScrollY < lastScrollY.current) {
+        setNavVisible(true);
+      }
+      // Hide when scrolling down
+      else if (currentScrollY > lastScrollY.current) {
+        setNavVisible(false);
+      }
+
+      lastScrollY.current = currentScrollY;
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
   async function handleSignOut() {
     if (signOut) {
       await signOut();
@@ -138,7 +172,11 @@ export default function NavbarResponsive() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 overflow-visible border-b border-border/60 bg-background/90 backdrop-blur">
+    <nav
+      className={`sticky top-0 z-50 overflow-visible border-b border-border/60 bg-background/90 backdrop-blur transition-transform duration-300 ${
+        navVisible ? "translate-y-0" : "-translate-y-full"
+      }`}
+    >
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center overflow-visible px-4 sm:px-6 lg:px-8">
         <Link
           href="/"

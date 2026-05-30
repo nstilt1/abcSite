@@ -65,7 +65,8 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
   vs.set_zoom_fn("sin");
 
   vs.orientation_range = 1;
-  vs.orientation_cycles = animationDuration / reorientationDuration;
+  vs.orientation_cycles = 1;
+  vs.orientation_duration = controls.reorientationDuration;
   vs.orientation_start_offset = 0;
   vs.set_orientation_fn(
     isReorientationFn(controls.reorientationFn)
@@ -215,11 +216,16 @@ export function HeroVideo({ controls }: HeroVideoProps) {
           vs,
         );
       } catch (e) {
+        engineRef.current = null;
+        vsRef.current = null;
+
         engine.stop_animation();
         engine.free();
         engine = null;
+
         vs.free();
         vs = null;
+
         activateVideoFallback(e);
         return;
       }
@@ -235,9 +241,19 @@ export function HeroVideo({ controls }: HeroVideoProps) {
     return () => {
       cancelled = true;
       ro?.disconnect();
-      engine?.stop_animation();
-      engine?.free();
-      vs?.free();
+
+      const currentEngine = engineRef.current;
+      const currentVs = vsRef.current;
+
+      engineRef.current = null;
+      vsRef.current = null;
+
+      currentEngine?.stop_animation();
+      currentEngine?.free();
+      currentVs?.free();
+
+      engine = null;
+      vs = null;
     };
   }, [useVideoFallback]);
 

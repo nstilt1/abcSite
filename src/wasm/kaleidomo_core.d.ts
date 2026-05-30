@@ -63,6 +63,7 @@ export class WasmVideoSettings {
     hue_start_offset: number;
     num_zoom_loops: number;
     orientation_cycles: number;
+    orientation_duration: number;
     orientation_range: number;
     orientation_start_offset: number;
     rotation_cycles: number;
@@ -87,6 +88,7 @@ export interface InitOutput {
     readonly __wbg_get_wasmvideosettings_hue_start_offset: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_num_zoom_loops: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_cycles: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_orientation_duration: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_range: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_start_offset: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_rotation_cycles: (a: number) => number;
@@ -103,6 +105,7 @@ export interface InitOutput {
     readonly __wbg_set_wasmvideosettings_hue_start_offset: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_num_zoom_loops: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_cycles: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_orientation_duration: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_range: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_start_offset: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_rotation_cycles: (a: number, b: number) => void;
@@ -128,10 +131,10 @@ export interface InitOutput {
     readonly wasmvideosettings_set_rotation_fn: (a: number, b: number, c: number) => void;
     readonly wasmvideosettings_set_zoom_fn: (a: number, b: number, c: number) => void;
     readonly __wasm_bindgen_func_elem_710: (a: number, b: number) => void;
-    readonly __wasm_bindgen_func_elem_2254: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_2256: (a: number, b: number) => void;
     readonly __wasm_bindgen_func_elem_713: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_10324: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_2256: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_10326: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_2258: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;
