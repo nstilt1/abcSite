@@ -121,8 +121,8 @@ function orientationToHeroParams(value: number) {
 const DEFAULT_HERO_SETTINGS = {
   speed: durationToSpeedSlider(100),
   colorShift: 308,
-  reorientationSpeed: durationToSpeedSlider(100),
-  reorientationFn: "linear" as ReorientationFn,
+  reorientationSpeed: durationToSpeedSlider(160),
+  reorientationFn: "sin" as ReorientationFn,
 };
 
 function speedSliderToDuration(value: number) {
@@ -148,10 +148,10 @@ function durationToSpeedSlider(duration: number) {
 }
 
 export default function Home() {
-  const DEFAULT_HERO_SPEED = durationToSpeedSlider(100);
-  const DEFAULT_HERO_COLOR = 308;
-  const DEFAULT_REORIENTATION_SPEED = 1.49;
-  const DEFAULT_REORIENTATION_FN: ReorientationFn = "linear";
+  const DEFAULT_HERO_SPEED = DEFAULT_HERO_SETTINGS.speed;;
+  const DEFAULT_HERO_COLOR = DEFAULT_HERO_SETTINGS.colorShift;
+  const DEFAULT_REORIENTATION_SPEED = DEFAULT_HERO_SETTINGS.reorientationSpeed;
+  const DEFAULT_REORIENTATION_FN: ReorientationFn = DEFAULT_HERO_SETTINGS.reorientationFn;
 
   const [speed, setSpeed, heroSpeedLoaded] = useLocalStorage("heroSpeed", DEFAULT_HERO_SPEED);
   const [colorShift, setColorShift, heroColorLoaded] = useLocalStorage("heroColor", DEFAULT_HERO_COLOR);

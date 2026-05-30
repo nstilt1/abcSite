@@ -20,8 +20,33 @@ function debugLog(...args: unknown[]) {
   if (DEBUG) console.log("[HeroKaleido]", ...args);
 }
 
+function isReorientationFn(value: unknown): value is HeroKaleidoControls["reorientationFn"] {
+  return (
+    value === "linear" ||
+    value === "triangle" ||
+    value === "saw" ||
+    value === "sin" ||
+    value === "sin2" ||
+    value === "-cos"
+  );
+}
+
+function finiteOr(value: number, fallback: number) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls) {
-  vs.animation_duration = controls.animationDuration;
+  const animationDuration = Math.max(
+    0.001,
+    finiteOr(controls.animationDuration, 100),
+  );
+
+  const reorientationDuration = Math.max(
+    0.001,
+    finiteOr(controls.reorientationDuration, 100),
+  );
+
+  vs.animation_duration = animationDuration;
 
   vs.hue_range = 0;
   vs.hue_cycles = 0;
@@ -40,9 +65,13 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
   vs.set_zoom_fn("sin");
 
   vs.orientation_range = 1;
-  vs.orientation_cycles = controls.animationDuration / Math.max(0.001, controls.reorientationDuration);
+  vs.orientation_cycles = animationDuration / reorientationDuration;
   vs.orientation_start_offset = 0;
-  vs.set_orientation_fn(controls.reorientationFn);
+  vs.set_orientation_fn(
+    isReorientationFn(controls.reorientationFn)
+      ? controls.reorientationFn
+      : "linear",
+  );
 }
 
 type HeroVideoProps = {

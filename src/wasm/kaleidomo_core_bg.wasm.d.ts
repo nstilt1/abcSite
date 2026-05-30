@@ -49,10 +49,10 @@ export const wasmvideosettings_set_orientation_fn: (a: number, b: number, c: num
 export const wasmvideosettings_set_rotation_fn: (a: number, b: number, c: number) => void;
 export const wasmvideosettings_set_zoom_fn: (a: number, b: number, c: number) => void;
 export const __wasm_bindgen_func_elem_710: (a: number, b: number) => void;
-export const __wasm_bindgen_func_elem_2255: (a: number, b: number) => void;
+export const __wasm_bindgen_func_elem_2254: (a: number, b: number) => void;
 export const __wasm_bindgen_func_elem_713: (a: number, b: number, c: number) => void;
-export const __wasm_bindgen_func_elem_10325: (a: number, b: number, c: number, d: number) => void;
-export const __wasm_bindgen_func_elem_2257: (a: number, b: number, c: number) => void;
+export const __wasm_bindgen_func_elem_10324: (a: number, b: number, c: number, d: number) => void;
+export const __wasm_bindgen_func_elem_2256: (a: number, b: number, c: number) => void;
 export const __wbindgen_export: (a: number, b: number) => number;
 export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
 export const __wbindgen_export3: (a: number) => void;
