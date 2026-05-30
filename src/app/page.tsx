@@ -121,7 +121,7 @@ function orientationToHeroParams(value: number) {
 const DEFAULT_HERO_SETTINGS = {
   speed: durationToSpeedSlider(100),
   colorShift: 308,
-  reorientationSpeed: durationToSpeedSlider(160),
+  reorientationSpeed: reorientationSliderToDuration(64 * Math.PI),
   reorientationFn: "sin" as ReorientationFn,
 };
 
@@ -143,6 +143,36 @@ function durationToSpeedSlider(duration: number) {
   const minDuration = 5;
 
   const t = Math.log(duration / maxDuration) / Math.log(minDuration / maxDuration);
+
+  return minSlider + t * (maxSlider - minSlider);
+}
+
+function reorientationSliderToDuration(value: number) {
+  if (value <= 0) return 0;
+
+  const minSlider = 0.1;
+  const maxSlider = 5;
+  const maxDuration = 999;
+  const minDuration = 1;
+
+  const clampedValue = Math.min(maxSlider, Math.max(minSlider, value));
+  const t = (clampedValue - minSlider) / (maxSlider - minSlider);
+
+  return maxDuration * Math.pow(minDuration / maxDuration, t);
+}
+
+function reorientationDurationToSlider(duration: number) {
+  if (duration <= 0) return 0;
+
+  const minSlider = 0.1;
+  const maxSlider = 5;
+  const maxDuration = 999;
+  const minDuration = 1;
+
+  const clampedDuration = Math.min(maxDuration, Math.max(minDuration, duration));
+  const t =
+    Math.log(clampedDuration / maxDuration) /
+    Math.log(minDuration / maxDuration);
 
   return minSlider + t * (maxSlider - minSlider);
 }
@@ -179,7 +209,7 @@ export default function Home() {
     return {
       animationDuration: speedSliderToDuration(speed),
       hueRotation: colorShift,
-      reorientationDuration: speedSliderToDuration(reorientationSpeed),
+      reorientationDuration: reorientationSliderToDuration(reorientationSpeed),
       reorientationFn,
       ...orientationParams,
     };
@@ -244,13 +274,17 @@ export default function Home() {
                     <div className="mb-4 flex items-start justify-between gap-4 text-sm">
                       <span className="font-medium">Reorientation speed</span>
                       <span className="shrink-0 text-zinc-300">
-                        {speedSliderToDuration(reorientationSpeed).toFixed(1)}s / loop
+                        <span>
+                          {reorientationSpeed <= 0
+                            ? "Off"
+                            : `${reorientationSliderToDuration(reorientationSpeed).toFixed(2)}s / loop`}
+                        </span>
                       </span>
                     </div>
 
                     <Slider
                       value={[reorientationSpeed]}
-                      min={1}
+                      min={0}
                       max={5}
                       step={0.01}
                       onValueChange={([v]) => setReorientationSpeed(v)}

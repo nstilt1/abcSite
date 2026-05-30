@@ -41,11 +41,7 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
     finiteOr(controls.animationDuration, 100),
   );
 
-  const reorientationDuration = Math.max(
-    0.001,
-    finiteOr(controls.reorientationDuration, 100),
-  );
-
+  const reorientationDuration = finiteOr(controls.reorientationDuration, 64 * Math.PI);
   vs.animation_duration = animationDuration;
 
   vs.hue_range = 0;
@@ -65,8 +61,10 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
   vs.set_zoom_fn("sin");
 
   vs.orientation_range = 1;
-  vs.orientation_cycles = 1;
-  vs.orientation_duration = controls.reorientationDuration;
+    vs.orientation_cycles =
+    reorientationDuration <= 0 ? 0 : 1 / reorientationDuration;
+
+  vs.orientation_duration = reorientationDuration;
   vs.orientation_start_offset = 0;
   vs.set_orientation_fn(
     isReorientationFn(controls.reorientationFn)
@@ -85,6 +83,8 @@ export function HeroVideo({ controls }: HeroVideoProps) {
   const engineRef = useRef<LiveKaleidoscopeEngine | null>(null);
   const vsRef = useRef<WasmVideoSettings | null>(null);
   const [useVideoFallback, setUseVideoFallback] = useState(false);
+  const [debugNow, setDebugNow] = useState(0);
+  const debugStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!useVideoFallback) return;
@@ -284,6 +284,25 @@ export function HeroVideo({ controls }: HeroVideoProps) {
     }
   }, [controls, useVideoFallback]);
 
+  useEffect(() => {
+    if (!DEBUG) return;
+
+    let raf = 0;
+
+    function tick(now: number) {
+      if (debugStartedAtRef.current === null) {
+        debugStartedAtRef.current = now;
+      }
+
+      setDebugNow(now);
+      raf = requestAnimationFrame(tick);
+    }
+
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   if (useVideoFallback) {
     return (
       <video
@@ -330,6 +349,37 @@ export function HeroVideo({ controls }: HeroVideoProps) {
           max-md:h-screen max-md:w-auto max-md:rotate-90
         "
       />
+      {process.env.NODE_ENV !== "production" && debugStartedAtRef.current !== null && (
+        <div className="absolute bottom-4 left-4 z-50 rounded-lg bg-black/70 px-3 py-2 font-mono text-xs text-white">
+          <div>
+            elapsed: {((debugNow - debugStartedAtRef.current) / 1000).toFixed(2)}s
+          </div>
+          <div>
+            animation: {controls.animationDuration.toFixed(2)}s
+          </div>
+          <div>
+            reorientation: {controls.reorientationDuration <= 0
+              ? "off"
+              : `${controls.reorientationDuration.toFixed(2)}s`}
+          </div>
+          <div>
+            source phase: {(
+              (((debugNow - debugStartedAtRef.current) / 1000) %
+                controls.animationDuration) /
+              controls.animationDuration
+            ).toFixed(4)}
+          </div>
+          <div>
+            reorient phase: {controls.reorientationDuration <= 0
+              ? "off"
+              : (
+                  (((debugNow - debugStartedAtRef.current) / 1000) %
+                    controls.reorientationDuration) /
+                  controls.reorientationDuration
+                ).toFixed(4)}
+          </div>
+        </div>
+      )}
     </>
   );
 }
