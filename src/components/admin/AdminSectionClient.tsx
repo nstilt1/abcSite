@@ -51,9 +51,7 @@ function loadDraft(section: AdminSection): Record<string, unknown>[] | null {
 function saveDraft(section: AdminSection, items: Record<string, unknown>[]) {
   try {
     localStorage.setItem(lsKey(section), JSON.stringify(items))
-  } catch {
-    /* storage full – silent fail */
-  }
+  } catch { /* storage full */ }
 }
 
 function clearDraft(section: AdminSection) {
@@ -130,7 +128,8 @@ function getColumns(section: AdminSection): ColDef[] {
         {
           header: "Stock",
           cell: (i) => {
-            if ((i.type as string) !== "inventoried") return <span className="text-muted-foreground text-xs">N/A</span>
+            if ((i.type as string) !== "inventoried")
+              return <span className="text-muted-foreground text-xs">N/A</span>
             const stock = i.stock as number
             return (
               <Badge variant={stock > 0 ? "default" : "destructive"}>
@@ -184,13 +183,17 @@ export default function AdminSectionClient({
   serverItems,
   sectionLabel,
 }: AdminSectionClientProps) {
-  // Items state – starts with server items, overridden by local draft if present
-  const [items, setItems] = useState<Record<string, unknown>[]>(serverItems as Record<string, unknown>[])
+  const [items, setItems] = useState<Record<string, unknown>[]>(
+    serverItems as Record<string, unknown>[]
+  )
   const [hasDraft, setHasDraft] = useState(false)
   const [q, setQ] = useState("")
 
-  // Editing state
-  const [editingItem, setEditingItem] = useState<Record<string, unknown> | null | "new">(null)
+  // Inline creation panel (below table)
+  const [creating, setCreating] = useState(false)
+
+  // Edit sheet (existing items)
+  const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
 
   // Deploy state
@@ -206,7 +209,6 @@ export default function AdminSectionClient({
     }
   }, [section])
 
-  // Persist whenever items change
   const persistItems = useCallback(
     (next: Record<string, unknown>[]) => {
       setItems(next)
@@ -218,14 +220,13 @@ export default function AdminSectionClient({
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  function handleSave(updated: Record<string, unknown>) {
-    if (editingItem === "new") {
-      persistItems([...items, updated])
-    } else {
-      persistItems(
-        items.map((it) => (it.slug === updated.slug ? updated : it))
-      )
-    }
+  function handleCreate(created: Record<string, unknown>) {
+    persistItems([...items, created])
+    setCreating(false)
+  }
+
+  function handleUpdate(updated: Record<string, unknown>) {
+    persistItems(items.map((it) => (it.slug === updated.slug ? updated : it)))
     setIsSheetOpen(false)
     setEditingItem(null)
   }
@@ -239,11 +240,7 @@ export default function AdminSectionClient({
   function openEdit(item: Record<string, unknown>) {
     setEditingItem(item)
     setIsSheetOpen(true)
-  }
-
-  function openNew() {
-    setEditingItem("new")
-    setIsSheetOpen(true)
+    setCreating(false) // close inline form if open
   }
 
   // ── Deploy ─────────────────────────────────────────────────────────────────
@@ -252,7 +249,6 @@ export default function AdminSectionClient({
     setDeploying(true)
     setDeployMsg(null)
     try {
-      // POST modified JSON to S3 then trigger Amplify rebuild
       const res = await fetch("/api/admin/deploy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -269,13 +265,12 @@ export default function AdminSectionClient({
     }
   }
 
-  // ── Revert ─────────────────────────────────────────────────────────────────
-
   function handleRevert() {
     clearDraft(section)
     setItems(serverItems as Record<string, unknown>[])
     setHasDraft(false)
     setDeployMsg(null)
+    setCreating(false)
   }
 
   // ── Filter ────────────────────────────────────────────────────────────────
@@ -309,7 +304,16 @@ export default function AdminSectionClient({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={openNew}>+ New Item</Button>
+          <Button
+            onClick={() => {
+              setCreating((v) => !v)
+              setIsSheetOpen(false)
+              setEditingItem(null)
+            }}
+            variant={creating ? "secondary" : "default"}
+          >
+            {creating ? "Cancel New" : "+ New Item"}
+          </Button>
 
           {hasDraft && (
             <>
@@ -351,6 +355,25 @@ export default function AdminSectionClient({
         </p>
       )}
 
+      {/* ── Inline creation form ── */}
+      {creating && (
+        <div className="rounded-xl border bg-muted/20 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-lg">New {sectionLabel} Item</h2>
+            <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>
+              ✕
+            </Button>
+          </div>
+          <Separator />
+          <AdminItemForm
+            section={section}
+            item={null}
+            onSave={handleCreate}
+            onCancel={() => setCreating(false)}
+          />
+        </div>
+      )}
+
       <Separator />
 
       {/* ── Search ── */}
@@ -389,12 +412,23 @@ export default function AdminSectionClient({
               </TableRow>
             ) : (
               filtered.map((item, idx) => (
-                <TableRow key={(item.slug as string) ?? idx} className="hover:bg-muted/30">
+                <TableRow
+                  key={(item.slug as string) ?? idx}
+                  className="hover:bg-muted/30 cursor-pointer"
+                  onClick={() => openEdit(item)}
+                >
                   {columns.map((col) => (
                     <TableCell key={col.header}>{col.cell(item)}</TableCell>
                   ))}
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEdit(item)
+                      }}
+                    >
                       Edit
                     </Button>
                   </TableCell>
@@ -405,21 +439,18 @@ export default function AdminSectionClient({
         </Table>
       </div>
 
-      {/* ── Edit / Create Sheet ── */}
+      {/* ── Edit Sheet (existing items only) ── */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>
-              {editingItem === "new" ? `New ${sectionLabel} Item` : `Edit Item`}
-            </SheetTitle>
+            <SheetTitle>Edit Item</SheetTitle>
           </SheetHeader>
-
           <div className="mt-6 pb-10">
-            {isSheetOpen && (
+            {isSheetOpen && editingItem && (
               <AdminItemForm
                 section={section}
-                item={editingItem === "new" ? null : (editingItem as Record<string, unknown>)}
-                onSave={handleSave}
+                item={editingItem}
+                onSave={handleUpdate}
                 onDelete={handleDelete}
                 onCancel={() => setIsSheetOpen(false)}
               />

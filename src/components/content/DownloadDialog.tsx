@@ -51,6 +51,8 @@ function PlatformButton({
 
 function AllPlatformsSection({ info }: { info: DownloadInfo }) {
   if (!isAllPlatforms(info)) return null
+  // Only render if the link is actually set
+  if (!info.allPlatformsDownloadLink) return null
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Universal build – works on all platforms.</p>
@@ -70,16 +72,17 @@ function AllPlatformsSection({ info }: { info: DownloadInfo }) {
 function PerPlatformSection({ info }: { info: DownloadInfo }) {
   if (isAllPlatforms(info)) return null
 
-  type PlatformKey = "windows" | "macos" | "linux"
-  const platforms: { key: PlatformKey; label: string }[] = [
+  const platforms: { key: "windows" | "macos" | "linux"; label: string }[] = [
     { key: "windows", label: "Windows" },
     { key: "macos", label: "macOS" },
     { key: "linux", label: "Linux" },
   ]
 
-  const available = platforms.filter(
-    ({ key }) => !!(info as Record<string, unknown>)[`${key}DownloadLink`]
-  )
+  // Only show platforms where the link is a non-empty string
+  const available = platforms.filter(({ key }) => {
+    const link = (info as Record<string, unknown>)[`${key}DownloadLink`]
+    return typeof link === "string" && link.trim() !== ""
+  })
 
   if (available.length === 0) return null
 
@@ -89,21 +92,24 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
       {available.map(({ key, label }) => {
         const href = (info as Record<string, unknown>)[`${key}DownloadLink`] as string
         const sha256 = (info as Record<string, unknown>)[`${key}DownloadSha256`] as string | undefined
-        return <PlatformButton key={key} label={label} href={href} sha256={sha256} />
+        return (
+          <PlatformButton
+            key={key}
+            label={label}
+            href={href}
+            sha256={sha256 && sha256.trim() !== "" ? sha256 : undefined}
+          />
+        )
       })}
     </div>
   )
 }
 
 function LicensedSection({ download }: { download: Download }) {
-  // Shows license options if software_licensor is present.
-  // Auth/cart logic lives outside this dialog; here we just show the purchase paths.
   const licensor = download.software_licensor
   if (!licensor) return null
 
-  const licenseEntries = Object.entries(
-    licensor.software_licensor_license_types ?? {}
-  )
+  const licenseEntries = Object.entries(licensor.software_licensor_license_types ?? {})
 
   return (
     <>
@@ -128,7 +134,6 @@ function LicensedSection({ download }: { download: Download }) {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    // Cart add logic – dispatches a custom event the cart context can listen to.
                     window.dispatchEvent(
                       new CustomEvent("add-to-cart", {
                         detail: {
@@ -171,7 +176,6 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {/* Version badge */}
           {download.version && (
             <div className="flex items-center gap-2">
               <Badge variant="outline">v{download.version}</Badge>
@@ -181,14 +185,12 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
             </div>
           )}
 
-          {/* Download section – Type A or Type B */}
           {isAllPlatforms(download.downloadInfo) ? (
             <AllPlatformsSection info={download.downloadInfo} />
           ) : (
             <PerPlatformSection info={download.downloadInfo} />
           )}
 
-          {/* License purchase section (only for licensed software) */}
           <LicensedSection download={download} />
         </div>
       </DialogContent>
