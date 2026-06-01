@@ -21,9 +21,12 @@ export function generateMetadata({ params }: { params: Params }): Metadata {
 }
 
 export default async function AdminSectionPage({ params }: { params: Params }) {
-  const { section } = params
+  const { section } = await params;
 
-  if (!isValidSection(section)) notFound()
+  if (!isValidSection(section)) {
+    console.log("section = " + section);
+    notFound()
+  }
 
   const cfg = ADMIN_SECTIONS.find((s) => s.section === section)!
 
