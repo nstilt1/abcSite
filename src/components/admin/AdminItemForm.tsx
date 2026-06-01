@@ -18,6 +18,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import type { AdminSection } from "@/types/content"
+import type { JSONContent } from "@tiptap/react"
+import dynamic from "next/dynamic"
+
+// Dynamically imported to avoid SSR issues with Tiptap DOM dependencies
+const TiptapEditor = dynamic(() => import("@/components/admin/TiptapEditor"), { ssr: false })
+const TiptapPreview = dynamic(() => import("@/components/admin/TiptapPreview"), { ssr: false })
 
 interface AdminItemFormProps {
   section: AdminSection
@@ -92,41 +98,107 @@ function BooleanRow({
   )
 }
 
-/** Raw JSON textarea for fields we don't have explicit UI for */
-function JsonField({
-  label,
+function TiptapField({
   value,
   onChange,
 }: {
-  label: string
   value: unknown
   onChange: (v: unknown) => void
 }) {
-  const [raw, setRaw] = useState(() => JSON.stringify(value, null, 2))
-  const [error, setError] = useState<string | null>(null)
+  const EMPTY_DOC: JSONContent = { type: "doc", content: [{ type: "paragraph" }] }
+  const doc = (value && typeof value === "object" ? value : EMPTY_DOC) as JSONContent
 
-  function handleChange(text: string) {
-    setRaw(text)
-    try {
-      onChange(JSON.parse(text))
-      setError(null)
-    } catch {
-      setError("Invalid JSON")
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-muted-foreground">Content</Label>
+      <div className="grid grid-cols-2 gap-4 min-h-[300px]">
+        <div className="rounded-md border bg-background overflow-auto">
+          <div className="px-3 py-1.5 border-b text-xs font-medium text-muted-foreground bg-muted/40">
+            Editor
+          </div>
+          <div className="p-2">
+            <TiptapEditor value={doc} onChange={(d) => onChange(d)} />
+          </div>
+        </div>
+        <div className="rounded-md border bg-background overflow-auto">
+          <div className="px-3 py-1.5 border-b text-xs font-medium text-muted-foreground bg-muted/40">
+            Preview
+          </div>
+          <div className="p-4">
+            <TiptapPreview value={doc} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Key-value editor for license type → Stripe price ID pairs
+function LicenseTypesField({
+  value,
+  onChange,
+}: {
+  value: Record<string, string>
+  onChange: (v: Record<string, string>) => void
+}) {
+  const entries = Object.entries(value)
+
+  function setEntry(oldKey: string, newKey: string, newVal: string) {
+    const updated: Record<string, string> = {}
+    for (const [k, v] of Object.entries(value)) {
+      updated[k === oldKey ? newKey : k] = k === oldKey ? newVal : v
     }
+    onChange(updated)
+  }
+
+  function addEntry() {
+    onChange({ ...value, "": "" })
+  }
+
+  function removeEntry(key: string) {
+    const updated = { ...value }
+    delete updated[key]
+    onChange(updated)
   }
 
   return (
-    <div className="space-y-1">
-      <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
-      <textarea
-        className={`w-full min-h-[120px] rounded-md border bg-background px-3 py-2 font-mono text-xs resize-y ${
-          error ? "border-destructive" : ""
-        }`}
-        value={raw}
-        onChange={(e) => handleChange(e.target.value)}
-        spellCheck={false}
-      />
-      {error && <p className="text-xs text-destructive">{error}</p>}
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-muted-foreground">
+        License Types
+      </Label>
+      <div className="space-y-2">
+        {entries.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">No license types yet.</p>
+        )}
+        {entries.map(([key, val], i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              placeholder="Label (e.g. Perpetual)"
+              value={key}
+              onChange={(e) => setEntry(key, e.target.value, val)}
+              className="h-8 text-sm"
+            />
+            <span className="text-muted-foreground text-xs shrink-0">→</span>
+            <Input
+              placeholder="Stripe price ID"
+              value={val}
+              onChange={(e) => setEntry(key, key, e.target.value)}
+              className="h-8 text-sm font-mono"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 shrink-0"
+              onClick={() => removeEntry(key)}
+            >
+              ×
+            </Button>
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={addEntry}>
+          + Add License Type
+        </Button>
+      </div>
     </div>
   )
 }
@@ -168,14 +240,7 @@ function DownloadFields({
             size="sm"
             onClick={() => {
               if (isAllPlatforms) {
-                set("downloadInfo", {
-                  windowsDownloadLink: "",
-                  windowsDownloadSha256: "",
-                  macosDownloadLink: "",
-                  macosDownloadSha256: "",
-                  linuxDownloadLink: "",
-                  linuxDownloadSha256: "",
-                })
+                set("downloadInfo", {})
               } else {
                 set("downloadInfo", {
                   allPlatformsDownloadLink: "",
@@ -251,9 +316,8 @@ function DownloadFields({
                 set("software_licensor", { ...licensor, software_licensor_product_id: v })
               }
             />
-            <JsonField
-              label="License Types (Map<string, Stripe price ID>)"
-              value={licensor.software_licensor_license_types ?? {}}
+            <LicenseTypesField
+              value={(licensor.software_licensor_license_types as Record<string, string>) ?? {}}
               onChange={(v) =>
                 set("software_licensor", { ...licensor, software_licensor_license_types: v })
               }
@@ -263,7 +327,7 @@ function DownloadFields({
       </div>
 
       <Separator />
-      <JsonField label="Tiptap Content (JSON)" value={data.tiptap ?? null} onChange={(v) => set("tiptap", v)} />
+      <TiptapField value={data.tiptap} onChange={(v) => set("tiptap", v)} />
     </>
   )
 }
@@ -313,7 +377,7 @@ function ProductFields({
       )}
 
       <Separator />
-      <JsonField label="Tiptap Content (JSON)" value={data.tiptap ?? null} onChange={(v) => set("tiptap", v)} />
+      <TiptapField value={data.tiptap} onChange={(v) => set("tiptap", v)} />
     </>
   )
 }
@@ -363,7 +427,7 @@ function BlogFields({
         </div>
       </div>
       <Separator />
-      <JsonField label="Tiptap Content (JSON)" value={data.tiptap ?? null} onChange={(v) => set("tiptap", v)} />
+      <TiptapField value={data.tiptap} onChange={(v) => set("tiptap", v)} />
     </>
   )
 }
@@ -411,7 +475,7 @@ function WebAppFields({
       </div>
 
       <Separator />
-      <JsonField label="Tiptap Content (JSON)" value={data.tiptap ?? null} onChange={(v) => set("tiptap", v)} />
+      <TiptapField value={data.tiptap} onChange={(v) => set("tiptap", v)} />
     </>
   )
 }
