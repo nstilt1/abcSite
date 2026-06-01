@@ -56,7 +56,7 @@ export default function ItemPage({ item }: ItemPageProps) {
   const [selectedLicense, setSelectedLicense] = useState<"perpetual" | "trial" | "subscription">("perpetual");
   const [isOpen, setIsOpen] = useState(false);
 
-  const bodyHtml = tiptapDocToHtml(item.tiptap);
+  const bodyHtml = tiptapDocToHtml(item.tiptap as object);
   const hero = getHeroImage(item);
 
   const handleAddToCart = () => {

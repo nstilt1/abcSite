@@ -1,0 +1,119 @@
+// ─── Downloads / Software Products ─────────────────────────────────────────
+
+export interface SoftwareLicensorAttributes {
+  software_licensor_product_id: string
+  /** Map of license type label → Stripe price ID.  e.g. { "Perpetual": "price_xxx" } */
+  software_licensor_license_types: Record<string, string>
+}
+
+/** Type A – single cross-platform download link */
+export interface DownloadInfoAllPlatforms {
+  allPlatformsDownloadLink: string
+  allPlatformsDownloadSha256: string
+}
+
+/** Type B – per-platform download links */
+export interface DownloadInfoPerPlatform {
+  windowsDownloadLink?: string
+  windowsDownloadSha256?: string
+  macosDownloadLink?: string
+  macosDownloadSha256?: string
+  linuxDownloadLink?: string
+  linuxDownloadSha256?: string
+}
+
+export type DownloadInfo = DownloadInfoAllPlatforms | DownloadInfoPerPlatform
+
+export function isAllPlatforms(d: DownloadInfo): d is DownloadInfoAllPlatforms {
+  return "allPlatformsDownloadLink" in d
+}
+
+export interface Download {
+  name: string
+  slug: string
+  /** Tiptap JSON document */
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  dateAdded?: string
+  version?: string
+  visible: boolean
+  sourceCodeUrl?: string
+  downloadInfo: DownloadInfo
+  software_licensor?: SoftwareLicensorAttributes | null
+}
+
+// ─── Products ────────────────────────────────────────────────────────────────
+
+export interface SoftwareProduct {
+  type: "software"
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  /** Derived from downloads.json where software_licensor != null */
+  software_licensor: SoftwareLicensorAttributes
+}
+
+export interface InventoriedProduct {
+  type: "inventoried"
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  stock: number
+}
+
+export interface ApiDrivenProduct {
+  type: "api_driven"
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  endpointURL: string
+  sourceImage: string
+}
+
+export type Product = SoftwareProduct | InventoriedProduct | ApiDrivenProduct
+
+// ─── Web Apps ─────────────────────────────────────────────────────────────────
+
+export interface WebApp {
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  urls: string[]
+  sourceCodeLink?: string
+}
+
+// ─── Blogs ────────────────────────────────────────────────────────────────────
+
+export interface Blog {
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  shortDescription?: string
+  keywords: string[]
+  date: string
+}
+
+// ─── Admin section registry ───────────────────────────────────────────────────
+
+export type AdminSection = "downloads" | "products" | "blogs" | "webapps"
+
+export interface AdminSectionConfig {
+  label: string
+  section: AdminSection
+  description: string
+}

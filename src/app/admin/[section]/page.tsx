@@ -1,30 +1,44 @@
-// src/app/admin/[section]/page.tsx
-import { notFound } from "next/navigation";
-import { ContentSectionEditor } from "@/components/admin/ContentSectionEditor";
-import { fetchSectionItems, getUpdateUrl } from "@/lib/admin-content/fetchers";
-import { isAdminSectionKey, sectionConfig } from "@/lib/admin-content/config";
+import { notFound } from "next/navigation"
+import { getCollection, type ContentKey } from "@/lib/contentStore"
+import { isValidSection, ADMIN_SECTIONS } from "@/lib/adminSections"
+import AdminSectionClient from "@/components/admin/AdminSectionClient"
+import type { AdminSection } from "@/types/content"
+import type { Metadata } from "next"
 
-type Props = {
-  params: Promise<{
-    section: string;
-  }>;
-};
+// force-dynamic: serve this page at request time in both dev and prod.
+// Without this, Next.js treats generateStaticParams as the only valid slugs
+// and returns 404 for everything else (including in Turbopack dev mode).
+export const dynamic = "force-dynamic"
 
-export default async function AdminSectionPage({ params }: Props) {
-  const { section } = await params;
+interface Params {
+  section: string
+}
 
-  if (!isAdminSectionKey(section)) {
-    notFound();
-  }
+export function generateMetadata({ params }: { params: Params }): Metadata {
+  if (!isValidSection(params.section)) return {}
+  const cfg = ADMIN_SECTIONS.find((s) => s.section === params.section)!
+  return { title: `Admin – ${cfg.label}` }
+}
 
-  const schema = sectionConfig[section];
-  const items = await fetchSectionItems<typeof schema.createEmpty extends () => infer T ? T : never>(section);
+export default async function AdminSectionPage({ params }: { params: Params }) {
+  const { section } = params
+
+  if (!isValidSection(section)) notFound()
+
+  const cfg = ADMIN_SECTIONS.find((s) => s.section === section)!
+
+  // JSON round-trip strips any non-serializable values before passing to the
+  // client component boundary.
+  const raw = getCollection(section as ContentKey)
+  const items = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>[]
 
   return (
-    <ContentSectionEditor
-      schema={schema as never}
-      initialItems={items as never}
-      saveEndpoint={getUpdateUrl()}
-    />
-  );
+    <main className="mx-auto max-w-6xl px-6 py-10 space-y-6">
+      <AdminSectionClient
+        section={section}
+        serverItems={items}
+        sectionLabel={cfg.label}
+      />
+    </main>
+  )
 }

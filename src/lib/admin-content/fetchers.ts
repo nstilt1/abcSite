@@ -5,13 +5,13 @@ import type { AdminSectionKey } from "./types";
 function getSectionUrl(section: AdminSectionKey): string {
   switch (section) {
     case "downloads":
-      return process.env.URL_DOWNLOADS ?? "";
+      return process.env.URL_DOWNLOADS ?? process.env.NEXT_PUBLIC_CDN_URL + "/content/downloads.json";
     case "blogs":
-      return process.env.URL_BLOGS ?? "";
+      return process.env.URL_BLOGS ?? process.env.NEXT_PUBLIC_CDN_URL + "/content/blogs.json";;
     case "products":
-      return process.env.URL_PRODUCTS ?? "";
+      return process.env.URL_PRODUCTS ?? process.env.NEXT_PUBLIC_CDN_URL + "/content/products.json";;
     case "web-apps":
-      return process.env.URL_WEB_APPS ?? "";
+      return process.env.URL_WEB_APPS ?? process.env.NEXT_PUBLIC_CDN_URL + "/content/webapps.json";;
   }
 }
 

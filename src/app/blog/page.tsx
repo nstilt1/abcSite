@@ -1,13 +1,34 @@
-import GalleryPage from "@/components/content/GalleryPage"
-import { getAllBlogs } from "@/lib/content"
+import { getCollection } from "@/lib/contentStore"
+import GalleryGrid from "@/components/content/GalleryGrid"
+import type { Blog } from "@/types/content"
+import type { Metadata } from "next"
 
-export default function BlogPage() {
+export const dynamic = "force-static"
+
+export const metadata: Metadata = {
+  title: "Blog",
+  description: "Articles and posts.",
+}
+
+export default function BlogsPage() {
+  const blogs = (getCollection("blogs") as Blog[]).sort(
+    (a, b) => (b.date ?? "").localeCompare(a.date ?? "")
+  )
+
+  const items = blogs.map((b) => ({
+    slug: b.slug,
+    name: b.name,
+    shortDescription: b.shortDescription,
+    thumbnailUrl: b.thumbnailUrl,
+  }))
+
   return (
-    <GalleryPage 
-      title="Blog" 
-      subtitle="Insights, tutorials, and updates."
-      collection="blogs"
-      items={getAllBlogs()}
-    />
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <h1 className="text-3xl font-semibold">Blog</h1>
+      <p className="mt-2 text-muted-foreground">
+        Articles, updates, and guides.
+      </p>
+      <GalleryGrid items={items} basePath="/blogs" />
+    </main>
   )
 }

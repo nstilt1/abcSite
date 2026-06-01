@@ -1,41 +1,43 @@
-import downloadsJson from "@/content/downloads.json";
-import webappsJson from "@/content/webapps.json";
-import blogsJson from "@/content/blogs.json";
-import productsJson from "@/content/products.json";
-import type { CollectionName, ContentItem } from "@/lib/content-types";
+import type { Download, Product, WebApp, Blog } from "@/types/content"
 
-const downloads = downloadsJson as ContentItem[];
-const webapps = webappsJson as ContentItem[];
-const products = productsJson as ContentItem[];
-const blogs = blogsJson as ContentItem[];
+export type ContentKey = "downloads" | "products" | "blogs" | "webapps"
 
-export const COLLECTIONS: CollectionName[] = ["blogs", "downloads", "products", "webapps"];
-
-const store: Record<CollectionName, ContentItem[]> = {
-  downloads,
-  blogs,
-  webapps,
-  products,
-};
-
-export function getCollection(collection: string): ContentItem[] {
-  if (!COLLECTIONS.includes(collection as CollectionName)) {
-    return [];
+// Read JSON content files. Uses require() so the read happens at call time
+// (not at module parse time), which avoids Turbopack's Performance.measure
+// instrumentation running before the Node.js performance timeline is ready.
+function readJson<T>(filename: string): T[] {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require(`../content/${filename}`) as T[]
+  } catch {
+    return []
   }
-
-  return store[collection as CollectionName] || [];
 }
 
-export function getItem(collection: string, slug: string): ContentItem | null {
-  const items = getCollection(collection);
-  return items.find((item) => item.slug === slug) || null;
+let _store: Record<ContentKey, unknown[]> | null = null
+
+function getStore(): Record<ContentKey, unknown[]> {
+  if (_store) return _store
+  _store = {
+    downloads: readJson<Download>("downloads.json"),
+    products:  readJson<Product>("products.json"),
+    blogs:     readJson<Blog>("blogs.json"),
+    webapps:   readJson<WebApp>("webapps.json"),
+  }
+  return _store
 }
 
-export function getAllItems(): Record<CollectionName, ContentItem[]> {
-  return {
-    blogs: getCollection("blogs"),
-    downloads: getCollection("downloads"),
-    webapps: getCollection("webapps"),
-    products: getCollection("products"),
-  };
+export function getCollection(key: ContentKey): unknown[] {
+  return getStore()[key] ?? []
+}
+
+export function getItem(key: ContentKey, slug: string): unknown | null {
+  const items = getStore()[key] as Array<{ slug: string }>
+  return items.find((x) => x.slug === slug) ?? null
+}
+
+export function getSoftwareDownloads(): Download[] {
+  return (getStore().downloads as Download[]).filter(
+    (d) => d.software_licensor != null
+  )
 }
