@@ -3,11 +3,16 @@ frontend:
   phases:
     preBuild:
       commands:
+        # ── Install bun ────────────────────────────────────────────────────────
         - curl -fsSL https://bun.sh/install | bash
         - export BUN_INSTALL="$HOME/.bun"
         - export PATH="$BUN_INSTALL/bin:$PATH"
         - bun --version
+
+        # ── Install dependencies ───────────────────────────────────────────────
         - bun install --frozen-lockfile
+
+        # ── Write .env.production ──────────────────────────────────────────────
         - |
           cat >> .env.production <<ENV
           NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
@@ -16,18 +21,30 @@ frontend:
           NEXT_PUBLIC_USER_POOL_ID=$NEXT_PUBLIC_USER_POOL_ID
           NEXT_PUBLIC_USER_POOL_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_CLIENT_ID
           PRESIGN_URL=$PRESIGN_URL
+          UPDATE_FN_URL=$UPDATE_FN_URL
           ENV
+
+        # ── Fetch REBUILD_URL from SSM ────────────────────────────────────────
+        # APP_NAME is set as an Amplify env var by CDK (e.g. "abc-dev").
+        # The actual webhook URL lives in SSM to avoid it appearing in CF outputs.
+        - export REBUILD_URL=$(aws ssm get-parameter --name "/$APP_NAME/rebuild-url" --with-decryption --query Parameter.Value --output text)
+        - echo "REBUILD_URL=$REBUILD_URL" >> .env.production
+
+        # ── Sync S3 content/ → src/content/ ───────────────────────────────────
         - mkdir -p src/content
         - aws s3 sync s3://$S3_BUCKET_NAME/content src/content --delete --region $REGION
+
     build:
       commands:
         - export BUN_INSTALL="$HOME/.bun"
         - export PATH="$BUN_INSTALL/bin:$PATH"
         - bun run build
+
   artifacts:
     baseDirectory: .next
     files:
       - "**/*"
+
   cache:
     paths:
       - .next/cache/**/*
