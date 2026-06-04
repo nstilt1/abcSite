@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import AdminItemForm from "@/components/admin/AdminItemForm"
 import type { AdminSection } from "@/types/content"
+import { postToApi } from "@/lib/post"
 
 // ─── Local-storage persistence ────────────────────────────────────────────────
 
@@ -253,45 +254,31 @@ export default function AdminSectionClient({
   async function handleDeploy() {
     setDeploying(true)
     setDeployMsg(null)
-    try {
-      const session = await fetchAuthSession()
-      const token = session.tokens?.idToken?.toString()
-      if (!token) throw new Error("Not signed in")
 
-      const res = await fetch("/api/admin/deploy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ section, items }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      clearDraft(section)
-      setHasDraft(false)
-      setDeployMsg("Deployed successfully. Amplify rebuild triggered.")
+    try {
+        await postToApi("/api/admin/deploy", { section, items })
+
+        clearDraft(section)
+        setHasDraft(false)
+        setDeployMsg("Deployed successfully.")
     } catch (e: unknown) {
-      setDeployMsg(`Deploy failed: ${e instanceof Error ? e.message : String(e)}`)
+        setDeployMsg(`Deploy failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
-      setDeploying(false)
+        setDeploying(false)
     }
-  }
+    }
 
   async function handleRebuild() {
     setRebuilding(true)
     setRebuildMsg(null)
-    try {
-      const session = await fetchAuthSession()
-      const token = session.tokens?.idToken?.toString()
-      if (!token) throw new Error("Not signed in")
 
-      const res = await fetch("/api/admin/rebuild", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error(await res.text())
-      setRebuildMsg("Amplify rebuild triggered. Site will update in ~2 minutes.")
+    try {
+        await postToApi("/api/admin/rebuild", {})
+        setRebuildMsg("Amplify rebuild triggered. Site will update in ~2 minutes.")
     } catch (e: unknown) {
-      setRebuildMsg(`Rebuild failed: ${e instanceof Error ? e.message : String(e)}`)
+        setRebuildMsg(`Rebuild failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
-      setRebuilding(false)
+        setRebuilding(false)
     }
   }
 
