@@ -12,11 +12,16 @@ const SECTION_TO_FIELD: Record<string, string> = {
 };
 
 export async function POST(request: NextRequest) {
-  const updateUrl = process.env.UPDATE_FN_URL;
-  if (!updateUrl) {
-    return NextResponse.json({ error: "Missing UPDATE_FN_URL env var" }, { status: 500 });
-  }
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+    if (!apiBaseUrl) {
+        return NextResponse.json(
+            { error: "Missing NEXT_PUBLIC_API_BASE_URL env var" },
+            { status: 500 },
+        );
+    }
+
+const updateUrl = new URL("api/update-content", apiBaseUrl).toString();
   // Forward the caller's Cognito token — the Lambda requires admin group membership
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {

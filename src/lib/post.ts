@@ -2,29 +2,23 @@
 
 import { fetchAuthSession } from "aws-amplify/auth";
 
-function decodeJwt(jwt: string) {
-  const [, payload] = jwt.split(".");
-  const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-  return JSON.parse(json);
-}
-
 export async function postToApi<T = unknown>(
   url: string,
   payload: unknown
 ): Promise<T> {
   const session = await fetchAuthSession();
 
-  const accessToken = session.tokens?.idToken?.toString();
+  const idToken = session.tokens?.idToken?.toString();
 
-  if (!accessToken) {
-    throw new Error("No access token available (user not signed in?)");
+  if (!idToken) {
+    throw new Error("No ID token available (user not signed in?)");
   }
 
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${idToken}`,
     },
     body: JSON.stringify(payload),
   });
