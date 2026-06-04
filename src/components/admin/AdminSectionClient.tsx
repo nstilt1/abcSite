@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { fetchAuthSession } from "aws-amplify/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -14,11 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -192,9 +193,9 @@ export default function AdminSectionClient({
   // Inline creation panel (below table)
   const [creating, setCreating] = useState(false)
 
-  // Edit sheet (existing items)
+  // Edit dialog (existing items) — replaces the Sheet
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null)
-  const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   // Deploy state
   const [deploying, setDeploying] = useState(false)
@@ -227,19 +228,19 @@ export default function AdminSectionClient({
 
   function handleUpdate(updated: Record<string, unknown>) {
     persistItems(items.map((it) => (it.slug === updated.slug ? updated : it)))
-    setIsSheetOpen(false)
+    setIsDialogOpen(false)
     setEditingItem(null)
   }
 
   function handleDelete(slug: string) {
     persistItems(items.filter((it) => it.slug !== slug))
-    setIsSheetOpen(false)
+    setIsDialogOpen(false)
     setEditingItem(null)
   }
 
   function openEdit(item: Record<string, unknown>) {
     setEditingItem(item)
-    setIsSheetOpen(true)
+    setIsDialogOpen(true)
     setCreating(false) // close inline form if open
   }
 
@@ -249,9 +250,13 @@ export default function AdminSectionClient({
     setDeploying(true)
     setDeployMsg(null)
     try {
+      const session = await fetchAuthSession()
+      const token = session.tokens?.idToken?.toString()
+      if (!token) throw new Error("Not signed in")
+
       const res = await fetch("/api/admin/deploy", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ section, items }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -307,7 +312,7 @@ export default function AdminSectionClient({
           <Button
             onClick={() => {
               setCreating((v) => !v)
-              setIsSheetOpen(false)
+              setIsDialogOpen(false)
               setEditingItem(null)
             }}
             variant={creating ? "secondary" : "default"}
@@ -439,25 +444,38 @@ export default function AdminSectionClient({
         </Table>
       </div>
 
-      {/* ── Edit Sheet (existing items only) ── */}
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Edit Item</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6 pb-10">
-            {isSheetOpen && editingItem && (
+      {/* ── Edit Dialog (full-screen on large viewports) ── */}
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open)
+          if (!open) setEditingItem(null)
+        }}
+      >
+        <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Edit Item
+              {editingItem?.slug ? (
+                <code className="ml-2 text-sm font-normal text-muted-foreground">
+                  {editingItem.slug as string}
+                </code>
+              ) : null}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 pb-4">
+            {isDialogOpen && editingItem && (
               <AdminItemForm
                 section={section}
                 item={editingItem}
                 onSave={handleUpdate}
                 onDelete={handleDelete}
-                onCancel={() => setIsSheetOpen(false)}
+                onCancel={() => setIsDialogOpen(false)}
               />
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

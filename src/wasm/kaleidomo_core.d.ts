@@ -5,6 +5,10 @@ export class LiveKaleidoscopeEngine {
     free(): void;
     [Symbol.dispose](): void;
     /**
+     * Clear the audio peak buffer and reset smoothing state.
+     */
+    clear_audio_peaks(): void;
+    /**
      * Convenience: fetch an image URL with `fetch`, decode it, upload to GPU.
      * Returns a Promise<void> — await it in TypeScript before calling start_animation.
      */
@@ -18,6 +22,11 @@ export class LiveKaleidoscopeEngine {
      * Creates a persistent GPU rendering context bound directly to a browser canvas element.
      */
     constructor(canvas: HTMLCanvasElement);
+    /**
+     * Set normalized audio peaks (one f32 per video frame, values 0.0–1.0).
+     * Call this after decoding and normalizing audio in TypeScript.
+     */
+    set_audio_peaks(peaks: Float32Array): void;
     /**
      * Begin the rAF loop.
      *
@@ -54,7 +63,15 @@ export class WasmVideoSettings {
      * Total loop duration in seconds (e.g. 10.0)
      */
     animation_duration: number;
+    audio_orientation_amount: number;
+    audio_peak_smoothing: number;
+    audio_reactive_enabled: boolean;
+    audio_reorientation_amount: number;
     fps: number;
+    hero_circle_left_x: number;
+    hero_circle_right_x: number;
+    hero_circle_y: number;
+    hero_desired_left_rotation: number;
     hue_cycles: number;
     /**
      * Hue sweep range in degrees (e.g. 60)
@@ -62,8 +79,16 @@ export class WasmVideoSettings {
     hue_range: number;
     hue_start_offset: number;
     num_zoom_loops: number;
+    /**
+     * Independent orientation cycles per second (base reorientation speed, no audio)
+     */
+    orientation_base_speed: number;
     orientation_cycles: number;
     orientation_duration: number;
+    /**
+     * Multiplier applied to the smoothed audio peak for orientation + rotation kick
+     */
+    orientation_peak_multiplier: number;
     orientation_range: number;
     orientation_start_offset: number;
     rotation_cycles: number;
@@ -82,13 +107,23 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_get_wasmvideosettings_animation_duration: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_audio_orientation_amount: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_audio_peak_smoothing: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_audio_reactive_enabled: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_audio_reorientation_amount: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_fps: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_hero_circle_left_x: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_hero_circle_right_x: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_hero_circle_y: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_hero_desired_left_rotation: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_hue_cycles: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_hue_range: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_hue_start_offset: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_num_zoom_loops: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_orientation_base_speed: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_cycles: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_duration: (a: number) => number;
+    readonly __wbg_get_wasmvideosettings_orientation_peak_multiplier: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_range: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_orientation_start_offset: (a: number) => number;
     readonly __wbg_get_wasmvideosettings_rotation_cycles: (a: number) => number;
@@ -99,13 +134,23 @@ export interface InitOutput {
     readonly __wbg_get_wasmvideosettings_zoom_start_offset: (a: number) => number;
     readonly __wbg_livekaleidoscopeengine_free: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_animation_duration: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_audio_orientation_amount: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_audio_peak_smoothing: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_audio_reactive_enabled: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_audio_reorientation_amount: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_fps: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_hero_circle_left_x: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_hero_circle_right_x: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_hero_circle_y: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_hero_desired_left_rotation: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_hue_cycles: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_hue_range: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_hue_start_offset: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_num_zoom_loops: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_orientation_base_speed: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_cycles: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_duration: (a: number, b: number) => void;
+    readonly __wbg_set_wasmvideosettings_orientation_peak_multiplier: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_range: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_orientation_start_offset: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_rotation_cycles: (a: number, b: number) => void;
@@ -115,9 +160,11 @@ export interface InitOutput {
     readonly __wbg_set_wasmvideosettings_zoom_min: (a: number, b: number) => void;
     readonly __wbg_set_wasmvideosettings_zoom_start_offset: (a: number, b: number) => void;
     readonly __wbg_wasmvideosettings_free: (a: number, b: number) => void;
+    readonly livekaleidoscopeengine_clear_audio_peaks: (a: number) => void;
     readonly livekaleidoscopeengine_load_image_from_url: (a: number, b: number, c: number) => number;
     readonly livekaleidoscopeengine_load_source_image: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly livekaleidoscopeengine_new: (a: number) => number;
+    readonly livekaleidoscopeengine_set_audio_peaks: (a: number, b: number) => void;
     readonly livekaleidoscopeengine_start_animation: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
     readonly livekaleidoscopeengine_stop_animation: (a: number) => void;
     readonly livekaleidoscopeengine_update_animation_settings: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
@@ -130,11 +177,11 @@ export interface InitOutput {
     readonly wasmvideosettings_set_orientation_fn: (a: number, b: number, c: number) => void;
     readonly wasmvideosettings_set_rotation_fn: (a: number, b: number, c: number) => void;
     readonly wasmvideosettings_set_zoom_fn: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_710: (a: number, b: number) => void;
-    readonly __wasm_bindgen_func_elem_2256: (a: number, b: number) => void;
-    readonly __wasm_bindgen_func_elem_713: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_10326: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_2258: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_1562: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_420: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_423: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_2164: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_1564: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;
