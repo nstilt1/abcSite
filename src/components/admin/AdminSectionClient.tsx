@@ -201,6 +201,10 @@ export default function AdminSectionClient({
   const [deploying, setDeploying] = useState(false)
   const [deployMsg, setDeployMsg] = useState<string | null>(null)
 
+  // Rebuild state
+  const [rebuilding, setRebuilding] = useState(false)
+  const [rebuildMsg, setRebuildMsg] = useState<string | null>(null)
+
   // Load draft from LS on mount
   useEffect(() => {
     const draft = loadDraft(section)
@@ -270,7 +274,28 @@ export default function AdminSectionClient({
     }
   }
 
-  function handleRevert() {
+  async function handleRebuild() {
+    setRebuilding(true)
+    setRebuildMsg(null)
+    try {
+      const session = await fetchAuthSession()
+      const token = session.tokens?.idToken?.toString()
+      if (!token) throw new Error("Not signed in")
+
+      const res = await fetch("/api/admin/rebuild", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setRebuildMsg("Amplify rebuild triggered. Site will update in ~2 minutes.")
+    } catch (e: unknown) {
+      setRebuildMsg(`Rebuild failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setRebuilding(false)
+    }
+  }
+
+    function handleRevert() {
     clearDraft(section)
     setItems(serverItems as Record<string, unknown>[])
     setHasDraft(false)
@@ -345,6 +370,10 @@ export default function AdminSectionClient({
               </Button>
             </>
           )}
+
+          <Button variant="outline" onClick={handleRebuild} disabled={rebuilding}>
+            {rebuilding ? "Triggering…" : "Rebuild Site"}
+          </Button>
         </div>
       </div>
 
@@ -357,6 +386,18 @@ export default function AdminSectionClient({
           }`}
         >
           {deployMsg}
+        </p>
+      )}
+
+      {rebuildMsg && (
+        <p
+          className={`text-sm rounded-md px-3 py-2 ${
+            rebuildMsg.startsWith("Rebuild failed")
+              ? "bg-destructive/10 text-destructive"
+              : "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+          }`}
+        >
+          {rebuildMsg}
         </p>
       )}
 
