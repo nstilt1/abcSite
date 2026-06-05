@@ -1,42 +1,41 @@
+"use client"
+
 import Link from "next/link"
 import Image from "next/image"
+import { useState, useMemo } from "react"
 import { getCollection, getSoftwareDownloads } from "@/lib/contentStore"
 import type { Product, InventoriedProduct } from "@/types/content"
 import { Badge } from "@/components/ui/badge"
-import type { Metadata } from "next"
+import { Input } from "@/components/ui/input"
+import { mediaURL } from "@/lib/mediaURL"
 
-export const dynamic = "force-static"
+// Shop page metadata is set in a separate layout / via generateMetadata on the
+// server version if needed; this page is client-rendered for filtering.
 
-export const metadata: Metadata = {
-  title: "Shop",
-  description: "Software licenses and physical goods.",
-}
+type SortKey = "newest" | "oldest" | "az" | "za"
 
-function ProductCard({
-  slug,
-  name,
-  shortDescription,
-  thumbnailUrl,
-  href,
-  badge,
-}: {
+interface ShopItem {
   slug: string
   name: string
   shortDescription?: string
   thumbnailUrl?: string
   href: string
   badge?: React.ReactNode
-}) {
+  dateAdded?: string
+}
+
+function ShopCard({ item }: { item: ShopItem }) {
+  const thumbSrc = mediaURL(item.thumbnailUrl)
   return (
     <Link
-      href={href}
+      href={item.href}
       className="group rounded-xl border overflow-hidden hover:bg-muted/30 transition-colors"
     >
       <div className="relative aspect-[16/9] w-full bg-muted">
-        {thumbnailUrl ? (
+        {thumbSrc ? (
           <Image
-            src={thumbnailUrl}
-            alt={name}
+            src={thumbSrc}
+            alt={item.name}
             fill
             className="object-cover"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -47,12 +46,12 @@ function ProductCard({
       </div>
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-medium group-hover:underline underline-offset-4">{name}</div>
-          {badge}
+          <div className="font-medium group-hover:underline underline-offset-4">{item.name}</div>
+          {item.badge}
         </div>
-        {shortDescription && (
+        {item.shortDescription && (
           <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
-            {shortDescription}
+            {item.shortDescription}
           </div>
         )}
       </div>
@@ -60,71 +59,123 @@ function ProductCard({
   )
 }
 
-export default function ShopPage() {
-  // Software section – licensor downloads
-  const softwareDownloads = getSoftwareDownloads()
+function SectionGrid({ title, subtitle, items }: { title: string; subtitle: string; items: ShopItem[] }) {
+  const [q, setQ] = useState("")
+  const [sort, setSort] = useState<SortKey>("newest")
 
-  // Physical goods – inventoried products from products.json
+  const displayed = useMemo(() => {
+    const query = q.trim().toLowerCase()
+    const filtered = query
+      ? items.filter((item) =>
+          `${item.slug} ${item.name} ${item.shortDescription ?? ""}`.toLowerCase().includes(query)
+        )
+      : items
+
+    return [...filtered].sort((a, b) => {
+      const nameA = a.name.toLowerCase()
+      const nameB = b.name.toLowerCase()
+      const dateA = new Date(a.dateAdded ?? 0).getTime()
+      const dateB = new Date(b.dateAdded ?? 0).getTime()
+      switch (sort) {
+        case "az":     return nameA.localeCompare(nameB)
+        case "za":     return nameB.localeCompare(nameA)
+        case "oldest": return dateA - dateB
+        case "newest":
+        default:       return dateB - dateA
+      }
+    })
+  }, [items, q, sort])
+
+  return (
+    <section>
+      <h2 className="text-2xl font-semibold">{title}</h2>
+      <p className="mt-1 text-muted-foreground">{subtitle}</p>
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <div className="mb-1 text-xs text-muted-foreground">Search</div>
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name or description…"
+          />
+        </div>
+        <div className="sm:w-48">
+          <div className="mb-1 text-xs text-muted-foreground">Sort</div>
+          <select
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="az">A → Z</option>
+            <option value="za">Z → A</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-3 text-sm text-muted-foreground">
+        Showing <span className="font-medium text-foreground">{displayed.length}</span>{" "}
+        of <span className="font-medium text-foreground">{items.length}</span>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="mt-6 text-muted-foreground italic">No items listed yet.</p>
+      ) : displayed.length === 0 ? (
+        <p className="mt-6 text-sm text-muted-foreground">No items match your search.</p>
+      ) : (
+        <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {displayed.map((item) => (
+            <ShopCard key={item.slug} item={item} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+export default function ShopPage() {
+  const softwareDownloads = getSoftwareDownloads()
   const allProducts = getCollection("products") as Product[]
-  const physicalGoods = allProducts.filter(
-    (p) => p.type === "inventoried"
-  ) as InventoriedProduct[]
+  const physicalGoods = allProducts.filter((p) => p.type === "inventoried") as InventoriedProduct[]
+
+  const softwareItems: ShopItem[] = softwareDownloads.map((d) => ({
+    slug: d.slug,
+    name: d.name,
+    shortDescription: d.shortDescription,
+    thumbnailUrl: d.thumbnailUrl,
+    href: `/downloads/${d.slug}`,
+    badge: <Badge variant="secondary">Software</Badge>,
+    dateAdded: d.dateAdded,
+  }))
+
+  const physicalItems: ShopItem[] = physicalGoods.map((p) => ({
+    slug: p.slug,
+    name: p.name,
+    shortDescription: p.shortDescription,
+    thumbnailUrl: p.thumbnailUrl,
+    href: `/products/${p.slug}`,
+    badge:
+      p.stock > 0 ? (
+        <Badge variant="default">In Stock</Badge>
+      ) : (
+        <Badge variant="destructive">Out of Stock</Badge>
+      ),
+  }))
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 space-y-14">
-      {/* ── Software ── */}
-      <section>
-        <h2 className="text-2xl font-semibold">Software</h2>
-        <p className="mt-1 text-muted-foreground">Licenses and downloadable applications.</p>
-
-        {softwareDownloads.length === 0 ? (
-          <p className="mt-6 text-muted-foreground italic">No software listed yet.</p>
-        ) : (
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {softwareDownloads.map((d) => (
-              <ProductCard
-                key={d.slug}
-                slug={d.slug}
-                name={d.name}
-                shortDescription={d.shortDescription}
-                thumbnailUrl={d.thumbnailUrl}
-                href={`/downloads/${d.slug}`}
-                badge={<Badge variant="secondary">Software</Badge>}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ── Physical Goods ── */}
-      <section>
-        <h2 className="text-2xl font-semibold">Physical Goods</h2>
-        <p className="mt-1 text-muted-foreground">Inventoried items available for purchase.</p>
-
-        {physicalGoods.length === 0 ? (
-          <p className="mt-6 text-muted-foreground italic">No physical goods listed yet.</p>
-        ) : (
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {physicalGoods.map((p) => (
-              <ProductCard
-                key={p.slug}
-                slug={p.slug}
-                name={p.name}
-                shortDescription={p.shortDescription}
-                thumbnailUrl={p.thumbnailUrl}
-                href={`/products/${p.slug}`}
-                badge={
-                  p.stock > 0 ? (
-                    <Badge variant="default">In Stock</Badge>
-                  ) : (
-                    <Badge variant="destructive">Out of Stock</Badge>
-                  )
-                }
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      <SectionGrid
+        title="Software"
+        subtitle="Licenses and downloadable applications."
+        items={softwareItems}
+      />
+      <SectionGrid
+        title="Physical Goods"
+        subtitle="Inventoried items available for purchase."
+        items={physicalItems}
+      />
     </main>
   )
 }

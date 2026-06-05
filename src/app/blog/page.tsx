@@ -11,15 +11,14 @@ export const metadata: Metadata = {
 }
 
 export default function BlogsPage() {
-  const blogs = (getCollection("blogs") as Blog[]).sort(
-    (a, b) => (b.date ?? "").localeCompare(a.date ?? "")
-  )
+  const blogs = getCollection("blogs") as Blog[]
 
   const items = blogs.map((b) => ({
     slug: b.slug,
     name: b.name,
     shortDescription: b.shortDescription,
     thumbnailUrl: b.thumbnailUrl,
+    dateAdded: b.date,
   }))
 
   return (

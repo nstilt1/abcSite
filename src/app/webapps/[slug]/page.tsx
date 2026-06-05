@@ -5,6 +5,7 @@ import { tiptapDocToHtml } from "@/lib/tiptapToHtml"
 import MetadataTable from "@/components/content/MetadataTable"
 import { Button } from "@/components/ui/button"
 import type { WebApp } from "@/types/content"
+import { mediaURL, resolveSourceCodeUrl } from "@/lib/mediaURL"
 import type { Metadata } from "next"
 
 export const dynamic = "force-static"
@@ -49,17 +50,17 @@ export default function WebAppSlugPage({ params }: { params: { slug: string } })
           ),
         }
       : null,
-    item.sourceCodeLink
+    resolveSourceCodeUrl(item.sourceCodeLink)
       ? {
           label: "Source Code",
           value: (
             <a
-              href={item.sourceCodeLink}
+              href={resolveSourceCodeUrl(item.sourceCodeLink)!}
               target="_blank"
               rel="noreferrer"
               className="underline underline-offset-4 hover:opacity-80"
             >
-              {item.sourceCodeLink}
+              {resolveSourceCodeUrl(item.sourceCodeLink)}
             </a>
           ),
         }
@@ -85,10 +86,10 @@ export default function WebAppSlugPage({ params }: { params: { slug: string } })
 
         <MetadataTable rows={rows} />
 
-        {item.heroImageUrl && (
+        {mediaURL(item.heroImageUrl) && (
           <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
             <Image
-              src={item.heroImageUrl}
+              src={mediaURL(item.heroImageUrl)!}
               alt={item.name}
               width={0}
               height={0}

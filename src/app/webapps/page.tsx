@@ -18,6 +18,7 @@ export default function WebAppsPage() {
     name: w.name,
     shortDescription: w.shortDescription,
     thumbnailUrl: w.thumbnailUrl,
+    dateAdded: undefined,
   }))
 
   return (

@@ -69,12 +69,14 @@ echo $AMPLIFY_ROLE
 
 # Deploy again with the build role specified:
 cdk deploy \
---context appName=abc-dev \
---context siteDomain=dev.alteredbrainchemistry.com \
---context hostedZoneDomain=alteredbrainchemistry.com \
---context cdnSubdomain=hephaestus \
---context githubRepo=nstilt1/abcSite \
---context githubBranch=master \
---context githubTokenSsmPath=/abc/github-token \
---context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/SiteStack-AmplifyAppRole0364E92A-NLGEpz0kwvYl
+  --context appName=abc-dev \
+  --context siteDomain=dev.alteredbrainchemistry.com \
+  --context hostedZoneDomain=alteredbrainchemistry.com \
+  --context cdnSubdomain=hephaestus \
+  --context githubRepo=nstilt1/abcSite \
+  --context githubBranch=master \
+  --context githubTokenSsmPath=/abc/github-token \
+  --context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/SiteStack-AmplifyAppRole0364E92A-NLGEpz0kwvYl \
+  --context githubOrg=nstilt1 \
+  --context githubOidcRepo=*
 ```

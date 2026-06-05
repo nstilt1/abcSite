@@ -19,6 +19,7 @@ export default function DownloadsPage() {
     name: d.name,
     shortDescription: d.shortDescription,
     thumbnailUrl: d.thumbnailUrl,
+    dateAdded: d.dateAdded,
   }))
 
   return (
