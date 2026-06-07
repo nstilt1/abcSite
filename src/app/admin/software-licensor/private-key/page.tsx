@@ -66,13 +66,13 @@ function isStorePrivateKeyFile(value: unknown): value is StorePrivateKeyFile {
 
 async function getAccessToken(): Promise<string> {
   const session = await fetchAuthSession();
-  const accessToken = session.tokens?.accessToken?.toString();
+  const idToken = session.tokens?.idToken?.toString();
 
-  if (!accessToken) {
-    throw new Error("No access token available. User is not signed in.");
+  if (!idToken) {
+    throw new Error("No ID token available. User is not signed in.");
   }
 
-  return accessToken;
+  return idToken;
 }
 
 async function readJsonFile(file: File): Promise<StorePrivateKeyFile> {
