@@ -22,6 +22,7 @@ frontend:
           NEXT_PUBLIC_USER_POOL_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_CLIENT_ID
           PRESIGN_URL=$PRESIGN_URL
           UPDATE_FN_URL=$UPDATE_FN_URL
+          SOFTWARE_LICENSOR_DISPATCH_API=$SOFTWARE_LICENSOR_DISPATCH_API
           ENV
 
         # ── Fetch REBUILD_URL from SSM ────────────────────────────────────────
