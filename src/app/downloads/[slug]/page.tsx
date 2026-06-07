@@ -4,6 +4,7 @@ import { getCollection, getItem } from "@/lib/contentStore"
 import { tiptapDocToHtml } from "@/lib/tiptapToHtml"
 import MetadataTable from "@/components/content/MetadataTable"
 import DownloadDialog from "@/components/content/DownloadDialog"
+import LicenseSection from "@/components/content/LicenseSection"
 import KaleidoHeroStatic from "@/components/KaleidoHeroStatic"
 import type { Download } from "@/types/content"
 import { isAllPlatforms } from "@/types/content"
@@ -50,16 +51,23 @@ export default async function DownloadSlugPage({ params }: PageProps) {
   const sourceUrl = resolveSourceCodeUrl(item.sourceCodeUrl)
   const isKaleidomo = slug.includes("kaleidomo")
 
+  const licenseMode = item.software_licensor?.license_mode ?? "free"
+  const hasLicensor = !!item.software_licensor
+
+  // License row in metadata
+  const licenseLabel = !hasLicensor
+    ? "Free"
+    : licenseMode === "free"
+    ? "Free (optional license available)"
+    : licenseMode === "optional"
+    ? "Free with restrictions — license unlocks full features"
+    : `Licensed (ID: ${item.software_licensor!.software_licensor_product_id})`
+
   const rows = [
     { label: "Version",    value: item.version ?? null },
     { label: "Date Added", value: item.dateAdded ?? null },
     { label: "Platforms",  value: detectPlatforms(item) },
-    {
-      label: "License",
-      value: item.software_licensor
-        ? `Licensed (ID: ${item.software_licensor.software_licensor_product_id})`
-        : "Free",
-    },
+    { label: "License",    value: licenseLabel },
     sourceUrl
       ? {
           label: "Source Code",
@@ -85,13 +93,18 @@ export default async function DownloadSlugPage({ params }: PageProps) {
           <p className="mt-3 text-muted-foreground">{item.shortDescription}</p>
         )}
 
-        <div className="mt-5">
+        {/* ── Action row ─────────────────────────────────────────────────────
+            - "free" with no licensor: just a Download button
+            - "free" / "optional" with licensor: Download button + license section below
+            - "required": Download button (installer) + prominent license section
+        */}
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <DownloadDialog download={item} />
         </div>
 
         <MetadataTable rows={rows} />
 
-        {/* Hero: WASM kaleidoscope for kaleidomo slugs, static image otherwise */}
+        {/* Hero image */}
         {isKaleidomo ? (
           <div className="relative mt-6 w-full overflow-hidden rounded-2xl border bg-black aspect-video">
             <KaleidoHeroStatic />
@@ -115,6 +128,11 @@ export default async function DownloadSlugPage({ params }: PageProps) {
         className="prose mt-8 max-w-none"
         dangerouslySetInnerHTML={{ __html: bodyHtml }}
       />
+
+      {/* ── Licensing section (client component for cart interaction) ───────── */}
+      {hasLicensor && (
+        <LicenseSection download={item} />
+      )}
     </main>
   )
 }

@@ -10,7 +10,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import type { Download, DownloadInfo } from "@/types/content"
 import { isAllPlatforms } from "@/types/content"
 
@@ -51,11 +50,12 @@ function PlatformButton({
 
 function AllPlatformsSection({ info }: { info: DownloadInfo }) {
   if (!isAllPlatforms(info)) return null
-  // Only render if the link is actually set
   if (!info.allPlatformsDownloadLink) return null
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">Universal build – works on all platforms.</p>
+      <p className="text-sm text-muted-foreground">
+        Universal build – works on all platforms.
+      </p>
       <div className="rounded-lg border p-3">
         <div className="flex items-center justify-between gap-3">
           <span className="font-medium text-sm">All Platforms</span>
@@ -78,7 +78,6 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
     { key: "linux", label: "Linux" },
   ]
 
-  // Only show platforms where the link is a non-empty string
   const available = platforms.filter(({ key }) => {
     const link = (info as Record<string, unknown>)[`${key}DownloadLink`]
     return typeof link === "string" && link.trim() !== ""
@@ -91,7 +90,9 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
       <p className="text-sm text-muted-foreground">Choose your platform:</p>
       {available.map(({ key, label }) => {
         const href = (info as Record<string, unknown>)[`${key}DownloadLink`] as string
-        const sha256 = (info as Record<string, unknown>)[`${key}DownloadSha256`] as string | undefined
+        const sha256 = (info as Record<string, unknown>)[`${key}DownloadSha256`] as
+          | string
+          | undefined
         return (
           <PlatformButton
             key={key}
@@ -105,69 +106,31 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
   )
 }
 
-function LicensedSection({ download }: { download: Download }) {
-  const licensor = download.software_licensor
-  if (!licensor) return null
-
-  const licenseEntries = Object.entries(licensor.software_licensor_license_types ?? {})
-
-  return (
-    <>
-      <Separator />
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">License Required</span>
-          <Badge variant="secondary">Licensed Software</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          A license is required to activate this software. Choose a license type below.
-        </p>
-        {licenseEntries.length > 0 ? (
-          <div className="space-y-2">
-            {licenseEntries.map(([type, priceId]) => (
-              <div
-                key={type}
-                className="flex items-center justify-between rounded-lg border px-4 py-3"
-              >
-                <span className="font-medium text-sm">{type}</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent("add-to-cart", {
-                        detail: {
-                          productId: licensor.software_licensor_product_id,
-                          priceId,
-                          licenseType: type,
-                          name: download.name,
-                          slug: download.slug,
-                        },
-                      })
-                    )
-                  }}
-                >
-                  Add to Cart
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground italic">No license types configured.</p>
-        )}
-      </div>
-    </>
-  )
-}
-
+/**
+ * DownloadDialog – shows ONLY the download links (installer files).
+ * The licensing / Add-to-Cart flow lives on the page itself.
+ */
 export default function DownloadDialog({ download }: DownloadDialogProps) {
   const [open, setOpen] = useState(false)
-  const isLicensed = !!download.software_licensor
+
+  const hasLinks = (() => {
+    const info = download.downloadInfo
+    if (isAllPlatforms(info)) return !!info.allPlatformsDownloadLink
+    return !!(
+      info.windowsDownloadLink ||
+      info.macosDownloadLink ||
+      info.linuxDownloadLink
+    )
+  })()
+
+  if (!hasLinks) return null
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="lg">{isLicensed ? "Download / Buy License" : "Download"}</Button>
+        <Button size="lg" variant="outline">
+          Download
+        </Button>
       </DialogTrigger>
 
       <DialogContent className="max-w-md">
@@ -180,7 +143,9 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
             <div className="flex items-center gap-2">
               <Badge variant="outline">v{download.version}</Badge>
               {download.dateAdded && (
-                <span className="text-xs text-muted-foreground">{download.dateAdded}</span>
+                <span className="text-xs text-muted-foreground">
+                  {download.dateAdded}
+                </span>
               )}
             </div>
           )}
@@ -190,8 +155,6 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
           ) : (
             <PerPlatformSection info={download.downloadInfo} />
           )}
-
-          <LicensedSection download={download} />
         </div>
       </DialogContent>
     </Dialog>

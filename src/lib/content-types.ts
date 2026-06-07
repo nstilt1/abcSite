@@ -16,6 +16,7 @@ export interface ExtendedItem extends ContentItem {
   type: CollectionName;
   url?: string;
   priceCents?: number;
+  priceId?: string,
   productId?: string;
   softwarelicensor?: {
     licenses: ("perpetual" | "trial" | "subscription")[];

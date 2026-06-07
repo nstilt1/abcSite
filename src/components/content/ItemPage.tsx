@@ -75,6 +75,7 @@ export default function ItemPage({ item }: ItemPageProps) {
       productId: productId,
       slug: item.slug,
       name: item.title || item.slug,
+      priceId: item.priceId ?? "",   // ← add this line
       priceCents: item.priceCents || 0,
       quantity: 1,
       licenseType: selectedLicense,

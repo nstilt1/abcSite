@@ -133,26 +133,47 @@ function TiptapField({
   )
 }
 
-// Key-value editor for license type → Stripe price ID pairs
+// ── LicensePriceEntry (mirrors types/content.ts) ─────────────────────────────
+
+interface LicensePriceEntry {
+  priceId: string
+  priceCents: number
+}
+
+type LicenseTypesValue = Record<string, LicensePriceEntry | string>
+
+/** Coerce whatever shape is stored to a LicensePriceEntry */
+function coerceEntry(raw: LicensePriceEntry | string): LicensePriceEntry {
+  if (typeof raw === "string") return { priceId: raw, priceCents: 0 }
+  return { priceId: raw.priceId ?? "", priceCents: raw.priceCents ?? 0 }
+}
+
+// Key-value editor for license type → { priceId, priceCents } pairs
+// Also accepts the legacy string format and upgrades on first edit.
 function LicenseTypesField({
   value,
   onChange,
 }: {
-  value: Record<string, string>
-  onChange: (v: Record<string, string>) => void
+  value: LicenseTypesValue
+  onChange: (v: LicenseTypesValue) => void
 }) {
   const entries = Object.entries(value)
 
-  function setEntry(oldKey: string, newKey: string, newVal: string) {
-    const updated: Record<string, string> = {}
+  function setEntry(
+    oldKey: string,
+    newKey: string,
+    newEntry: LicensePriceEntry
+  ) {
+    const updated: LicenseTypesValue = {}
     for (const [k, v] of Object.entries(value)) {
-      updated[k === oldKey ? newKey : k] = k === oldKey ? newVal : v
+      updated[k === oldKey ? newKey : k] =
+        k === oldKey ? newEntry : coerceEntry(v)
     }
     onChange(updated)
   }
 
   function addEntry() {
-    onChange({ ...value, "": "" })
+    onChange({ ...value, "": { priceId: "", priceCents: 0 } })
   }
 
   function removeEntry(key: string) {
@@ -166,38 +187,134 @@ function LicenseTypesField({
       <Label className="text-sm font-medium text-muted-foreground">
         License Types
       </Label>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {entries.length === 0 && (
           <p className="text-xs text-muted-foreground italic">No license types yet.</p>
         )}
-        {entries.map(([key, val], i) => (
-          <div key={i} className="flex items-center gap-2">
-            <Input
-              placeholder="Label (e.g. Perpetual)"
-              value={key}
-              onChange={(e) => setEntry(key, e.target.value, val)}
-              className="h-8 text-sm"
-            />
-            <span className="text-muted-foreground text-xs shrink-0">→</span>
-            <Input
-              placeholder="Stripe price ID"
-              value={val}
-              onChange={(e) => setEntry(key, key, e.target.value)}
-              className="h-8 text-sm font-mono"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 shrink-0"
-              onClick={() => removeEntry(key)}
-            >
-              ×
-            </Button>
-          </div>
-        ))}
+        {entries.map(([key, rawVal], i) => {
+          const entry = coerceEntry(rawVal)
+          return (
+            <div key={i} className="rounded-md border p-3 space-y-2 bg-muted/10">
+              {/* Label row */}
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Label (e.g. Perpetual)"
+                  value={key}
+                  onChange={(e) => setEntry(key, e.target.value, entry)}
+                  className="h-8 text-sm flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeEntry(key)}
+                >
+                  ×
+                </Button>
+              </div>
+              {/* Stripe price ID */}
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground w-24 shrink-0">
+                  Stripe Price ID
+                </Label>
+                <Input
+                  placeholder="price_xxx"
+                  value={entry.priceId}
+                  onChange={(e) =>
+                    setEntry(key, key, { ...entry, priceId: e.target.value })
+                  }
+                  className="h-8 text-sm font-mono flex-1"
+                />
+              </div>
+              {/* Dollar amount */}
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground w-24 shrink-0">
+                  Price (USD)
+                </Label>
+                <div className="relative flex-1">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                    $
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={entry.priceCents > 0 ? (entry.priceCents / 100).toFixed(2) : ""}
+                    onChange={(e) => {
+                      const dollars = parseFloat(e.target.value)
+                      const cents = isNaN(dollars) ? 0 : Math.round(dollars * 100)
+                      setEntry(key, key, { ...entry, priceCents: cents })
+                    }}
+                    className="h-8 text-sm pl-6"
+                  />
+                </div>
+                {entry.priceCents === 0 && (
+                  <span className="text-xs text-muted-foreground shrink-0">Free</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
         <Button variant="outline" size="sm" onClick={addEntry}>
           + Add License Type
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// License mode selector
+type LicenseMode = "free" | "optional" | "required"
+
+function LicenseModeField({
+  value,
+  onChange,
+}: {
+  value: LicenseMode
+  onChange: (v: LicenseMode) => void
+}) {
+  const options: { value: LicenseMode; label: string; description: string }[] = [
+    {
+      value: "free",
+      label: "Free",
+      description: "No license required. Download links shown freely.",
+    },
+    {
+      value: "optional",
+      label: "Optional",
+      description:
+        "Works without a license but with restrictions. License unlocks full features.",
+    },
+    {
+      value: "required",
+      label: "Required",
+      description:
+        "Must have a valid license to use. Download links (installer) still shown.",
+    },
+  ]
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-muted-foreground">
+        License Mode
+      </Label>
+      <div className="grid grid-cols-3 gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`rounded-lg border p-3 text-left text-xs transition-colors focus:outline-none ${
+              value === opt.value
+                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                : "border-border hover:border-primary/50"
+            }`}
+          >
+            <div className="font-semibold">{opt.label}</div>
+            <div className="text-muted-foreground mt-0.5">{opt.description}</div>
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -308,7 +425,7 @@ function DownloadFields({
           />
         </div>
         {licensor !== null && (
-          <div className="space-y-3 pl-4 border-l">
+          <div className="space-y-4 pl-4 border-l">
             <FieldRow
               label="Product ID"
               value={(licensor.software_licensor_product_id as string) ?? ""}
@@ -316,8 +433,14 @@ function DownloadFields({
                 set("software_licensor", { ...licensor, software_licensor_product_id: v })
               }
             />
+            <LicenseModeField
+              value={((licensor.license_mode as LicenseMode) ?? "free")}
+              onChange={(v) =>
+                set("software_licensor", { ...licensor, license_mode: v })
+              }
+            />
             <LicenseTypesField
-              value={(licensor.software_licensor_license_types as Record<string, string>) ?? {}}
+              value={(licensor.software_licensor_license_types as LicenseTypesValue) ?? {}}
               onChange={(v) =>
                 set("software_licensor", { ...licensor, software_licensor_license_types: v })
               }

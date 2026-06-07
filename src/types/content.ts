@@ -1,9 +1,39 @@
 // ─── Downloads / Software Products ─────────────────────────────────────────
 
+/**
+ * license_mode controls how the download page presents this software:
+ *  - "free"         : no license needed, download links shown freely
+ *  - "optional"     : works without a license but with restrictions; download
+ *                     links always shown + optional license purchase section
+ *  - "required"     : a valid license must be purchased before use; download
+ *                     links are still shown (installer), license section is
+ *                     prominent
+ */
+export type LicenseMode = "free" | "optional" | "required"
+
+/**
+ * A single license type entry.
+ * `priceId`    – Stripe price ID
+ * `priceCents` – display price in cents (set by admin, stored alongside priceId)
+ * `label`      – human-readable name e.g. "Perpetual", "Trial"
+ */
+export interface LicensePriceEntry {
+  priceId: string
+  priceCents: number
+}
+
 export interface SoftwareLicensorAttributes {
   software_licensor_product_id: string
-  /** Map of license type label → Stripe price ID.  e.g. { "Perpetual": "price_xxx" } */
-  software_licensor_license_types: Record<string, string>
+  /**
+   * Map of license type label → { priceId, priceCents }
+   * e.g. { "Perpetual": { priceId: "price_xxx", priceCents: 2999 } }
+   *
+   * For backwards compat the value may also be a plain string (old format).
+   * Consumers should use the `parseLicenseEntry` helper.
+   */
+  software_licensor_license_types: Record<string, LicensePriceEntry | string>
+  /** Controls how the software is gated. Defaults to "free" when absent. */
+  license_mode?: LicenseMode
 }
 
 /** Type A – single cross-platform download link */
@@ -26,6 +56,14 @@ export type DownloadInfo = DownloadInfoAllPlatforms | DownloadInfoPerPlatform
 
 export function isAllPlatforms(d: DownloadInfo): d is DownloadInfoAllPlatforms {
   return "allPlatformsDownloadLink" in d
+}
+
+/** Normalise the dual old-string / new-object license entry format */
+export function parseLicenseEntry(
+  val: LicensePriceEntry | string
+): LicensePriceEntry {
+  if (typeof val === "string") return { priceId: val, priceCents: 0 }
+  return val
 }
 
 export interface Download {
