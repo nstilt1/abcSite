@@ -17,7 +17,7 @@ export async function getAccessToken(): Promise<string> {
 export async function dispatchSoftwareLicensor<T>(body: ApiRequest): Promise<T> {
   const accessToken = await getAccessToken();
 
-  const response = await fetch("/api/software-licensor-dispatch", {
+  const response = await fetch("/api/admin/software-licensor-dispatch", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
