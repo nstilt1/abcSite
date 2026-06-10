@@ -6,10 +6,9 @@ import MetadataTable from "@/components/content/MetadataTable"
 import DownloadDialog from "@/components/content/DownloadDialog"
 import LicenseSection from "@/components/content/LicenseSection"
 import KaleidoHeroStatic from "@/components/KaleidoHeroStatic"
-import type { Download, DownloadInfo } from "@/types/content"
+import type { Download } from "@/types/content"
 import { isAllPlatforms } from "@/types/content"
 import { mediaURL, resolveSourceCodeUrl } from "@/lib/mediaURL"
-import { Button } from "@/components/ui/button"
 import type { Metadata } from "next"
 
 export const dynamic = "force-static"
@@ -42,44 +41,6 @@ function detectPlatforms(d: Download): string {
   return plats.join(", ") || "—"
 }
 
-/** Renders direct download anchor-buttons for every available platform/file. */
-function DirectDownloadButtons({ info }: { info: DownloadInfo }) {
-  if (isAllPlatforms(info)) {
-    if (!info.allPlatformsDownloadLink) return null
-    return (
-      <a href={info.allPlatformsDownloadLink} download>
-        <Button size="lg">Download</Button>
-      </a>
-    )
-  }
-
-  const platforms: { key: "windows" | "macos" | "linux"; label: string }[] = [
-    { key: "windows", label: "Download for Windows" },
-    { key: "macos",   label: "Download for macOS"   },
-    { key: "linux",   label: "Download for Linux"   },
-  ]
-
-  const available = platforms.filter(({ key }) => {
-    const link = (info as Record<string, unknown>)[`${key}DownloadLink`]
-    return typeof link === "string" && link.trim() !== ""
-  })
-
-  if (available.length === 0) return null
-
-  return (
-    <>
-      {available.map(({ key, label }) => {
-        const href = (info as Record<string, unknown>)[`${key}DownloadLink`] as string
-        return (
-          <a key={key} href={href} download>
-            <Button size="lg">{label}</Button>
-          </a>
-        )
-      })}
-    </>
-  )
-}
-
 export default async function DownloadSlugPage({ params }: PageProps) {
   const { slug } = await params
   const item = getItem("downloads", slug) as Download | null
@@ -102,11 +63,28 @@ export default async function DownloadSlugPage({ params }: PageProps) {
     ? "Free with restrictions — license unlocks full features"
     : `Licensed (ID: ${item.software_licensor!.software_licensor_product_id})`
 
+  // Only include the Download row if there's at least one valid download link.
+  // NOTE: isAllPlatforms checks key *existence*, not value — a record can have
+  // allPlatformsDownloadLink: "" alongside per-platform links, so we must check
+  // all non-empty link fields regardless of which shape the object appears to be.
+  const hasDownloadLinks = (() => {
+    const info = item.downloadInfo as Record<string, unknown>
+    return !!(
+      (typeof info.allPlatformsDownloadLink === "string" && info.allPlatformsDownloadLink.trim()) ||
+      (typeof info.windowsDownloadLink === "string" && info.windowsDownloadLink.trim()) ||
+      (typeof info.macosDownloadLink === "string" && info.macosDownloadLink.trim()) ||
+      (typeof info.linuxDownloadLink === "string" && info.linuxDownloadLink.trim())
+    )
+  })()
+
   const rows = [
     { label: "Version",    value: item.version ?? null },
     { label: "Date Added", value: item.dateAdded ?? null },
     { label: "Platforms",  value: detectPlatforms(item) },
     { label: "License",    value: licenseLabel },
+    hasDownloadLinks
+      ? { label: "Download", value: <DownloadDialog download={item} /> }
+      : null,
     sourceUrl
       ? {
           label: "Source Code",
@@ -131,15 +109,6 @@ export default async function DownloadSlugPage({ params }: PageProps) {
         {item.shortDescription && (
           <p className="mt-3 text-muted-foreground">{item.shortDescription}</p>
         )}
-
-        {/* ── Action row ─────────────────────────────────────────────────────
-            Direct download buttons for each available platform file.
-            DownloadDialog remains as a fallback / summary view.
-        */}
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <DirectDownloadButtons info={item.downloadInfo} />
-          <DownloadDialog download={item} />
-        </div>
 
         <MetadataTable rows={rows} />
 

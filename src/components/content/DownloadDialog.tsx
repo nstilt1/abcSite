@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,18 +11,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import type { Download, DownloadInfo } from "@/types/content"
+import type { Download as DownloadItem, DownloadInfo } from "@/types/content"
 import { isAllPlatforms } from "@/types/content"
 
 interface DownloadDialogProps {
-  download: Download
+  download: DownloadItem
 }
 
+/** Renders the SHA-256 hash in an accessible way. */
 function HashLine({ hash }: { hash?: string }) {
   if (!hash) return null
   return (
-    <p className="mt-1 font-mono text-[10px] text-muted-foreground break-all">
-      SHA-256: {hash}
+    <p
+      className="mt-1.5 font-mono text-[10px] text-muted-foreground break-all leading-relaxed"
+      aria-label={`SHA-256 checksum: ${hash}`}
+    >
+      <span aria-hidden="true">SHA-256:&nbsp;</span>
+      <code className="select-all">{hash}</code>
     </p>
   )
 }
@@ -39,8 +45,11 @@ function PlatformButton({
     <div className="rounded-lg border p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium text-sm">{label}</span>
-        <a href={href} download>
-          <Button size="sm">Download</Button>
+        <a href={href} download aria-label={`Download for ${label}`}>
+          <Button size="sm" className="gap-1.5">
+            <Download className="size-3.5" aria-hidden="true" />
+            Download
+          </Button>
         </a>
       </div>
       <HashLine hash={sha256} />
@@ -50,7 +59,7 @@ function PlatformButton({
 
 function AllPlatformsSection({ info }: { info: DownloadInfo }) {
   if (!isAllPlatforms(info)) return null
-  if (!info.allPlatformsDownloadLink) return null
+  if (!info.allPlatformsDownloadLink?.trim()) return null
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
@@ -59,8 +68,15 @@ function AllPlatformsSection({ info }: { info: DownloadInfo }) {
       <div className="rounded-lg border p-3">
         <div className="flex items-center justify-between gap-3">
           <span className="font-medium text-sm">All Platforms</span>
-          <a href={info.allPlatformsDownloadLink} download>
-            <Button size="sm">Download</Button>
+          <a
+            href={info.allPlatformsDownloadLink}
+            download
+            aria-label="Download for all platforms"
+          >
+            <Button size="sm" className="gap-1.5">
+              <Download className="size-3.5" aria-hidden="true" />
+              Download
+            </Button>
           </a>
         </div>
         <HashLine hash={info.allPlatformsDownloadSha256} />
@@ -70,12 +86,13 @@ function AllPlatformsSection({ info }: { info: DownloadInfo }) {
 }
 
 function PerPlatformSection({ info }: { info: DownloadInfo }) {
-  if (isAllPlatforms(info)) return null
+  // Don't skip if allPlatformsDownloadLink key exists but is empty — fall through to per-platform.
+  if (isAllPlatforms(info) && info.allPlatformsDownloadLink?.trim()) return null
 
   const platforms: { key: "windows" | "macos" | "linux"; label: string }[] = [
     { key: "windows", label: "Windows" },
-    { key: "macos", label: "macOS" },
-    { key: "linux", label: "Linux" },
+    { key: "macos",   label: "macOS"   },
+    { key: "linux",   label: "Linux"   },
   ]
 
   const available = platforms.filter(({ key }) => {
@@ -98,7 +115,7 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
             key={key}
             label={label}
             href={href}
-            sha256={sha256 && sha256.trim() !== "" ? sha256 : undefined}
+            sha256={sha256?.trim() ? sha256 : undefined}
           />
         )
       })}
@@ -107,19 +124,22 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
 }
 
 /**
- * DownloadDialog – shows ONLY the download links (installer files).
- * The licensing / Add-to-Cart flow lives on the page itself.
+ * DownloadDialog – triggered by a single "Download" button that opens a modal
+ * showing per-platform download buttons (only those with a valid URL) and
+ * their SHA-256 checksums in an accessible format.
  */
 export default function DownloadDialog({ download }: DownloadDialogProps) {
   const [open, setOpen] = useState(false)
 
+  // isAllPlatforms checks key existence only — a record can have
+  // allPlatformsDownloadLink: "" alongside per-platform links, so check all.
   const hasLinks = (() => {
-    const info = download.downloadInfo
-    if (isAllPlatforms(info)) return !!info.allPlatformsDownloadLink
+    const info = download.downloadInfo as Record<string, unknown>
     return !!(
-      info.windowsDownloadLink ||
-      info.macosDownloadLink ||
-      info.linuxDownloadLink
+      (typeof info.allPlatformsDownloadLink === "string" && info.allPlatformsDownloadLink.trim()) ||
+      (typeof info.windowsDownloadLink === "string" && info.windowsDownloadLink.trim()) ||
+      (typeof info.macosDownloadLink === "string" && info.macosDownloadLink.trim()) ||
+      (typeof info.linuxDownloadLink === "string" && info.linuxDownloadLink.trim())
     )
   })()
 
@@ -128,7 +148,8 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" variant="outline">
+        <Button size="lg" className="gap-2">
+          <Download className="size-4" aria-hidden="true" />
           Download
         </Button>
       </DialogTrigger>
@@ -150,11 +171,8 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
             </div>
           )}
 
-          {isAllPlatforms(download.downloadInfo) ? (
-            <AllPlatformsSection info={download.downloadInfo} />
-          ) : (
-            <PerPlatformSection info={download.downloadInfo} />
-          )}
+          <AllPlatformsSection info={download.downloadInfo} />
+          <PerPlatformSection info={download.downloadInfo} />
         </div>
       </DialogContent>
     </Dialog>

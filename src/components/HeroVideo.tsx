@@ -54,8 +54,8 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
   vs.rotation_start_offset = 0;
   vs.set_rotation_fn("sin2");
 
-  vs.zoom_max = 0.79090958991783823;
-  vs.zoom_min = 0.69;
+  vs.zoom_max = 1.09090958991783823;
+  vs.zoom_min = 0.9;
   vs.zoom_start_offset = 0;
   vs.num_zoom_loops = 4;
   vs.set_zoom_fn("sin");

@@ -231,7 +231,9 @@ function InnerCheckoutPage() {
               className="gap-2"
             >
               {submitting ? (
-                <><Loader2 className="size-4 animate-spin" /> Redirecting to Stripe…</>
+                <><Loader2 className="size-4 animate-spin" /> {validTotal === 0 ? "Processing…" : "Redirecting to Stripe…"}</>
+              ) : validTotal === 0 ? (
+                <><CheckCircle className="size-4" /> Proceed</>
               ) : (
                 <><CheckCircle className="size-4" /> Pay with Stripe</>
               )}
@@ -242,9 +244,9 @@ function InnerCheckoutPage() {
           </div>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            You will be redirected to Stripe to complete payment. Licenses are
-            provisioned automatically once payment succeeds. If license creation
-            fails for any paid item, a full refund is issued automatically.
+            {validTotal === 0
+              ? "No payment is required. Licenses are provisioned automatically once you proceed."
+              : "You will be redirected to Stripe to complete payment. Licenses are provisioned automatically once payment succeeds. If license creation fails for any paid item, a full refund is issued automatically."}
           </p>
         </>
       )}

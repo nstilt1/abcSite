@@ -103,7 +103,20 @@ export async function POST(req: NextRequest) {
         slug: item.slug,
     })))
 
-  // 5. Create the Stripe Checkout session
+  // 5. If the entire order is free (all items have priceCents === 0 or no
+  //    Stripe price IDs), skip Stripe entirely and redirect straight to success.
+  //    Stripe does not allow checkout sessions with a $0 total.
+  const totalCents = items.reduce((sum, i) => sum + (i.priceCents ?? 0), 0)
+  const hasPriceIds = items.some((i) => i.priceId?.trim())
+
+  if (totalCents === 0 || !hasPriceIds) {
+    // Encode license metadata in the query string so the success page can
+    // display confirmation without a real Stripe session.
+    const freeSessionId = `free_${Date.now()}_${userSub}`
+    return NextResponse.json({ url: `${siteUrl}/checkout/success?session_id=${freeSessionId}&free=1` })
+  }
+
+  // 6. Create the Stripe Checkout session
   const stripe = getStripe()
 
   let session: Stripe.Checkout.Session
