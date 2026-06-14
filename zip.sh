@@ -1,5 +1,7 @@
 cd ..
 
+rm ./frontend.zip
+
 zip -r frontend.zip ./frontend \
   -x "*/wasm/*" \
   -x "*/node_modules/*" \

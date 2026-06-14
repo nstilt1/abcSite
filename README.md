@@ -67,6 +67,12 @@ AMPLIFY_ROLE=$(aws amplify get-app --app-id $APP_ID \
   --output text)
 echo $AMPLIFY_ROLE
 
+# Set secrets
+aws ssm put-parameter --name "/abc/stripe-secret-key" --value "sk_live_" --type SecureString
+aws ssm put-parameter --name "/abc/stripe-webhook-secret" --value "whsec_"   --type Secure
+
+String
+
 # Deploy again with the build role specified:
 cdk deploy \
   --context appName=abc-dev \
@@ -79,4 +85,18 @@ cdk deploy \
   --context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/SiteStack-AmplifyAppRole0364E92A-NLGEpz0kwvYl \
   --context githubOrg=nstilt1 \
   --context githubOidcRepo=*
+
+# Deploy to root domain:
+cdk deploy \
+  --context appName=abc-dev \
+  --context siteDomain=alteredbrainchemistry.com \
+  --context hostedZoneDomain=alteredbrainchemistry.com \
+  --context cdnSubdomain=hephaestus \
+  --context githubRepo=nstilt1/abcSite \
+  --context githubBranch=master \
+  --context githubTokenSsmPath=/abc/github-token \
+  --context amplifyBuildRoleArn=arn:aws:iam::744502367450:role/SiteStack-AmplifyAppRole0364E92A-NLGEpz0kwvYl \
+  --context githubOrg=nstilt1 \
+  --context githubOidcRepo=* \
+  --context mapRootAndWww=true
 ```
