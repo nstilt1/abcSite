@@ -61,7 +61,7 @@ export default async function DownloadSlugPage({ params }: PageProps) {
     ? "Free (optional license available)"
     : licenseMode === "optional"
     ? "Free with restrictions — license unlocks full features"
-    : `Licensed (ID: ${item.software_licensor!.software_licensor_product_id})`
+    : "License required to use this software"
 
   // Only include the Download row if there's at least one valid download link.
   // NOTE: isAllPlatforms checks key *existence*, not value — a record can have
