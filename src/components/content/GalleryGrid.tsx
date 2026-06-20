@@ -5,6 +5,8 @@ import Image from "next/image"
 import { useState, useMemo } from "react"
 import { Input } from "@/components/ui/input"
 import { mediaURL } from "@/lib/mediaURL"
+import { HeroVideo } from "@/components/HeroVideo"
+import type { HeroKaleidoControls } from "@/app/page"
 
 export interface GalleryItem {
   slug: string
@@ -21,6 +23,23 @@ interface GalleryGridProps {
 }
 
 type SortKey = "newest" | "oldest" | "az" | "za"
+
+// ── Kaleidomo card dimensions ─────────────────────────────────────────────
+// Same grid as shop: max-w-5xl (1024px) − px-6×2 (48px) = 976px usable.
+// 3-col with gap-5 (20px): card width = (976 − 40) / 3 ≈ 312px.
+// Thumbnail is aspect-[16/9]: height = 312 × 9/16 ≈ 176px.
+const KALEIDO_CANVAS_W = 312
+const KALEIDO_CANVAS_H = 176
+
+const KALEIDO_CONTROLS: HeroKaleidoControls = {
+  animationDuration:     100,
+  hueRotation:           308,
+  triangleCenterX:       515.1039592844847,
+  triangleCenterY:       755.3734001945962,
+  triangleRotationRad:   6.22,
+  reorientationDuration: 64 * Math.PI,
+  reorientationFn:       "sin",
+}
 
 export default function GalleryGrid({ items, basePath }: GalleryGridProps) {
   const [q, setQ] = useState("")
@@ -98,8 +117,16 @@ export default function GalleryGrid({ items, basePath }: GalleryGridProps) {
               href={`${basePath}/${item.slug}`}
               className="group rounded-xl border overflow-hidden hover:bg-muted/30 transition-colors"
             >
-              <div className="relative aspect-[16/9] w-full bg-muted">
-                {thumbSrc ? (
+              <div className="relative aspect-[16/9] w-full bg-muted overflow-hidden">
+                {item.slug === "kaleidomo" ? (
+                  <div className="absolute inset-0 bg-black">
+                    <HeroVideo
+                      controls={KALEIDO_CONTROLS}
+                      width={KALEIDO_CANVAS_W}
+                      height={KALEIDO_CANVAS_H}
+                    />
+                  </div>
+                ) : thumbSrc ? (
                   <Image
                     src={thumbSrc}
                     alt={item.name}

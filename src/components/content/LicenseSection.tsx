@@ -13,6 +13,9 @@ import { toast } from "sonner"
 
 interface LicenseSectionProps {
   download: Download
+  /** "page" (default) renders with top separator and margin, for use at the bottom of a page.
+   *  "inline" strips those so the component can sit inside a card or grid cell. */
+  variant?: "page" | "inline"
 }
 
 function formatCents(cents: number): string {
@@ -24,7 +27,7 @@ function formatCents(cents: number): string {
   }).format(cents / 100)
 }
 
-export default function LicenseSection({ download }: LicenseSectionProps) {
+export default function LicenseSection({ download, variant = "page" }: LicenseSectionProps) {
   const { addItem, items } = useCart()
   const router = useRouter()
   const licensor = download.software_licensor
@@ -89,8 +92,8 @@ export default function LicenseSection({ download }: LicenseSectionProps) {
     )
 
   return (
-    <section className="mt-10">
-      <Separator className="mb-8" />
+    <section className={variant === "page" ? "mt-10" : undefined}>
+      {variant === "page" && <Separator className="mb-8" />}
 
       <div className="space-y-6">
         {/* Section heading */}

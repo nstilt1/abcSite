@@ -93,7 +93,8 @@ export default async function DownloadSlugPage({ params }: PageProps) {
               href={sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="underline underline-offset-4 hover:opacity-80"
+              title={sourceUrl}
+              className="block truncate underline underline-offset-4 hover:opacity-80"
             >
               {sourceUrl}
             </a>
@@ -104,43 +105,47 @@ export default async function DownloadSlugPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <header>
-        <h1 className="text-3xl font-semibold">{item.name}</h1>
-        {item.shortDescription && (
-          <p className="mt-3 text-muted-foreground">{item.shortDescription}</p>
+      <h1 className="text-3xl font-semibold">{item.name}</h1>
+      {item.shortDescription && (
+        <p className="mt-3 text-muted-foreground">{item.shortDescription}</p>
+      )}
+
+      <div className={`mt-6 gap-6 items-start ${hasLicensor ? "grid lg:grid-cols-[1fr_minmax(0,420px)]" : ""}`}>
+        <div className="[&>*]:mt-0">
+          <MetadataTable rows={rows} />
+        </div>
+
+        {hasLicensor && (
+          <div className="rounded-xl border p-5">
+            <LicenseSection download={item} variant="inline" />
+          </div>
         )}
+      </div>
 
-        <MetadataTable rows={rows} />
-
-        {/* Hero image */}
-        {isKaleidomo ? (
-          <div className="relative mt-6 w-full overflow-hidden rounded-2xl border bg-black aspect-video">
-            <KaleidoHeroStatic />
-          </div>
-        ) : heroSrc ? (
-          <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
-            <Image
-              src={heroSrc}
-              alt={item.name}
-              width={0}
-              height={0}
-              className="h-auto w-auto max-w-full"
-              sizes="100vw"
-              priority
-            />
-          </div>
-        ) : null}
-      </header>
+      {isKaleidomo ? (
+        <div className="relative mt-6 w-full overflow-hidden rounded-2xl border bg-black aspect-video">
+          <KaleidoHeroStatic />
+        </div>
+      ) : heroSrc ? (
+        <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
+          <Image
+            src={heroSrc}
+            alt={item.name}
+            width={0}
+            height={0}
+            className="h-auto w-auto max-w-full"
+            sizes="100vw"
+            priority
+          />
+        </div>
+      ) : null}
 
       <article
         className="prose mt-8 max-w-none"
         dangerouslySetInnerHTML={{ __html: bodyHtml }}
       />
 
-      {/* ── Licensing section (client component for cart interaction) ───────── */}
-      {hasLicensor && (
-        <LicenseSection download={item} />
-      )}
+      {hasLicensor && <LicenseSection download={item} />}
     </main>
   )
 }

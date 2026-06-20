@@ -16,7 +16,7 @@ interface MetadataTableProps {
   title?: string
 }
 
-export default function MetadataTable({ rows, title = "At a glance" }: MetadataTableProps) {
+export default function MetadataTable({ rows, title = "" }: MetadataTableProps) {
   const visible = rows.filter((r) => r.value !== null && r.value !== undefined && r.value !== "")
   if (visible.length === 0) return null
 
@@ -27,14 +27,21 @@ export default function MetadataTable({ rows, title = "At a glance" }: MetadataT
           {title}
         </div>
       )}
+      {/* max-w-0 on the value cell is the CSS table trick that lets auto layout
+          distribute width from the container rather than content — the label
+          column sizes to fit its text, the value column gets the rest.
+          break-words handles long values that wrap; truncate on inline content
+          (like the source URL) clips with ellipsis within that budget.       */}
       <Table>
         <TableBody>
           {visible.map((row, i) => (
             <TableRow key={i}>
-              <TableCell className="w-[160px] align-top font-medium whitespace-nowrap">
+              <TableCell className="w-px whitespace-nowrap align-top font-medium pr-6">
                 {row.label}
               </TableCell>
-              <TableCell className="align-top">{row.value}</TableCell>
+              <TableCell className="align-top whitespace-normal break-words max-w-0">
+                {row.value}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

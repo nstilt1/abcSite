@@ -8,13 +8,61 @@ import type {
   WasmVideoSettings,
 } from "@/wasm/kaleidomo_core";
 
-const SOURCE_IMAGE_URL =
-  "https://hephaestus.alteredbrainchemistry.com/images/og-pink-flower-comp-3.jpg";
+// Served via a Next.js rewrite (see next.config.ts → rewrites) so the WASM
+// runtime's fetch stays same-origin on all environments. The rewrite proxies
+// through to hephaestus.alteredbrainchemistry.com in production.
+const SOURCE_IMAGE_URL = "/wasm-assets/og-pink-flower-comp-3.jpg";
 
 const FALLBACK_VIDEO_URL =
   "https://hephaestus.alteredbrainchemistry.com/media/uploads/output-wv1-720-8.mp4";
 
 const DEBUG = true;
+
+// ── Module-level WASM initialisation cache ────────────────────────────────
+// The JS module + wasm binary init is done once and cached. This is safe
+// because wasm-bindgen's init() is idempotent after the first call, but
+// running it concurrently (Strict Mode double-mount) corrupts internal state.
+//
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let wasmModPromise: Promise<any> | null = null;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getWasmMod(): Promise<any> {
+  if (!wasmModPromise) {
+    wasmModPromise = (async () => {
+      const wasmJsUrl  = "/wasm/kaleidomo_core.js";
+      const wasmBinUrl = new URL("/wasm/kaleidomo_core_bg.wasm", window.location.origin);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mod: any = await import(/* webpackIgnore: true */ wasmJsUrl);
+      await (mod.default as typeof import("@/wasm/kaleidomo_core").default)(wasmBinUrl);
+      return mod;
+    })().catch((e) => {
+      wasmModPromise = null; // allow retry on next mount
+      throw e;
+    });
+  }
+  return wasmModPromise;
+}
+
+// ── Serialisation mutex ───────────────────────────────────────────────────
+// React Strict Mode fires: mount → (sync) cleanup → mount.
+// The second init() must not start until the first teardown() has finished
+// freeing WASM objects, otherwise two engine instances share the same linear
+// memory simultaneously and wasm-bindgen's internal buffer views go stale
+// ("memory access out of bounds").
+//
+// This is a simple promise chain: each lifecycle slot appends to the tail and
+// awaits the previous slot before proceeding.
+let lifecycleTail: Promise<void> = Promise.resolve();
+
+function serialise(fn: () => Promise<void>): Promise<void> {
+  // Append fn to the tail; swallow errors so the chain never breaks.
+  const next = lifecycleTail.then(fn).catch(() => {});
+  lifecycleTail = next;
+  return next;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 
 function debugLog(...args: unknown[]) {
   if (DEBUG) console.log("[HeroKaleido]", ...args);
@@ -54,14 +102,14 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
   vs.rotation_start_offset = 0;
   vs.set_rotation_fn("sin2");
 
-  vs.zoom_max = 1.09090958991783823;
-  vs.zoom_min = 0.9;
+  vs.zoom_max = 0.9090958991783823;
+  vs.zoom_min = 0.85;
   vs.zoom_start_offset = 0;
   vs.num_zoom_loops = 4;
   vs.set_zoom_fn("sin");
 
   vs.orientation_range = 1;
-    vs.orientation_cycles =
+  vs.orientation_cycles =
     reorientationDuration <= 0 ? 0 : 1 / reorientationDuration;
 
   vs.orientation_duration = reorientationDuration;
@@ -75,13 +123,19 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
 
 type HeroVideoProps = {
   controls: HeroKaleidoControls;
+  /** Logical render width in pixels (sets canvas resolution & aspect ratio). Defaults to 1920. */
+  width?: number;
+  /** Logical render height in pixels (sets canvas resolution & aspect ratio). Defaults to 1080. */
+  height?: number;
+  /** Number of kaleidoscope tiles. Passed to start_animation / update_animation_settings. Defaults to 3. */
+  tile_count?: number;
 };
 
-export function HeroVideo({ controls }: HeroVideoProps) {
+export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 3 }: HeroVideoProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef  = useRef<HTMLVideoElement | null>(null);
   const engineRef = useRef<LiveKaleidoscopeEngine | null>(null);
-  const vsRef = useRef<WasmVideoSettings | null>(null);
+  const vsRef     = useRef<WasmVideoSettings | null>(null);
   const [useVideoFallback, setUseVideoFallback] = useState(false);
   const [debugNow, setDebugNow] = useState(0);
   const debugStartedAtRef = useRef<number | null>(null);
@@ -92,12 +146,11 @@ export function HeroVideo({ controls }: HeroVideoProps) {
     const video = videoRef.current;
     if (!video) return;
 
-    video.muted = true;
+    video.muted        = true;
     video.defaultMuted = true;
-    video.playsInline = true;
+    video.playsInline  = true;
 
     const playPromise = video.play();
-
     if (playPromise !== undefined) {
       playPromise.catch((e: unknown) => {
         debugLog("Fallback video autoplay failed:", e);
@@ -108,20 +161,34 @@ export function HeroVideo({ controls }: HeroVideoProps) {
   useEffect(() => {
     if (useVideoFallback) return;
 
-    let engine: LiveKaleidoscopeEngine | null = null;
-    let vs: WasmVideoSettings | null = null;
     let ro: ResizeObserver | null = null;
     let cancelled = false;
 
     function activateVideoFallback(reason: unknown) {
       debugLog("activating video fallback:", reason);
-
-      if (!cancelled) {
-        setUseVideoFallback(true);
-      }
+      if (!cancelled) setUseVideoFallback(true);
     }
 
-    async function init() {
+    // Single owner of all WASM objects. Nulls refs before freeing so calling
+    // twice is always safe (second call reads null and skips).
+    function teardown() {
+      const eng = engineRef.current;
+      const vs  = vsRef.current;
+      engineRef.current = null;
+      vsRef.current     = null;
+      try { eng?.stop_animation(); } catch { /* never started or already freed */ }
+      try { eng?.free();           } catch { /* already freed */ }
+      try { vs?.free();            } catch { /* already freed */ }
+    }
+
+    // Both init and teardown run through the serialise() chain so they never
+    // overlap with a concurrent mount's lifecycle even under Strict Mode.
+    serialise(async () => {
+      // By the time this slot runs, any previous teardown has completed, so WASM
+      // memory is quiescent and it is safe to create a new engine and load images.
+
+      if (cancelled) return; // cleanup fired before we got the lock
+
       debugLog("init() called");
 
       const canvas = canvasRef.current;
@@ -131,32 +198,15 @@ export function HeroVideo({ controls }: HeroVideoProps) {
       }
 
       function fitCanvas() {
-        canvas!.width = 1920;
-        canvas!.height = 1080;
+        canvas!.width  = width;
+        canvas!.height = height;
       }
-
       fitCanvas();
-
-      const wasmJsUrl = "/wasm/kaleidomo_core.js";
-      const wasmBinUrl = new URL(
-        "/wasm/kaleidomo_core_bg.wasm",
-        window.location.origin,
-      );
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let mod: any;
-
       try {
-        mod = await import(/* webpackIgnore: true */ wasmJsUrl);
-      } catch (e) {
-        activateVideoFallback(e);
-        return;
-      }
-
-      try {
-        await (mod.default as typeof import("@/wasm/kaleidomo_core").default)(
-          wasmBinUrl,
-        );
+        mod = await getWasmMod();
       } catch (e) {
         activateVideoFallback(e);
         return;
@@ -165,44 +215,31 @@ export function HeroVideo({ controls }: HeroVideoProps) {
       if (cancelled) return;
 
       try {
-        engine = await new (mod.LiveKaleidoscopeEngine as typeof LiveKaleidoscopeEngine)(
-          canvas,
-        );
+        const engine = await new (mod.LiveKaleidoscopeEngine as typeof LiveKaleidoscopeEngine)(canvas);
         engineRef.current = engine;
       } catch (e) {
         activateVideoFallback(e);
         return;
       }
 
-      if (cancelled) {
-        engine.free();
-        engine = null;
-        return;
-      }
+      if (cancelled) { teardown(); return; }
 
       try {
-        await engine.load_image_from_url(SOURCE_IMAGE_URL);
+        await engineRef.current!.load_image_from_url(SOURCE_IMAGE_URL);
       } catch (e) {
-        engine.free();
-        engine = null;
+        teardown();
         activateVideoFallback(e);
         return;
       }
 
-      if (cancelled) {
-        engine.free();
-        engine = null;
-        return;
-      }
+      if (cancelled) { teardown(); return; }
 
-      vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
-
+      const vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
       vsRef.current = vs;
-
       applyVideoSettings(vs, controls);
 
       try {
-        engine.start_animation(
+        engineRef.current!.start_animation(
           24,
           354,
           0,
@@ -211,55 +248,36 @@ export function HeroVideo({ controls }: HeroVideoProps) {
           controls.triangleCenterX,
           controls.triangleCenterY,
           controls.triangleRotationRad,
-          3,
+          tile_count,
           controls.hueRotation,
           vs,
         );
       } catch (e) {
-        engineRef.current = null;
-        vsRef.current = null;
-
-        engine.stop_animation();
-        engine.free();
-        engine = null;
-
-        vs.free();
-        vs = null;
-
+        teardown();
         activateVideoFallback(e);
         return;
       }
+
+      if (cancelled) { teardown(); return; }
 
       debugLog("animation started ✓");
 
       ro = new ResizeObserver(() => fitCanvas());
       ro.observe(canvas.parentElement ?? canvas);
-    }
-
-    void init().catch((e: unknown) => activateVideoFallback(e));
+    });
 
     return () => {
       cancelled = true;
       ro?.disconnect();
-
-      const currentEngine = engineRef.current;
-      const currentVs = vsRef.current;
-
-      engineRef.current = null;
-      vsRef.current = null;
-
-      currentEngine?.stop_animation();
-      currentEngine?.free();
-      currentVs?.free();
-
-      engine = null;
-      vs = null;
+      // Queue teardown in the same chain — it will run after init() finishes
+      // (or immediately if init() was cancelled before it acquired the lock).
+      serialise(async () => teardown());
     };
-  }, [useVideoFallback]);
+  }, [useVideoFallback, width, height, tile_count]);
 
   useEffect(() => {
     const engine = engineRef.current;
-    const vs = vsRef.current;
+    const vs     = vsRef.current;
 
     if (!engine || !vs || useVideoFallback) return;
 
@@ -275,7 +293,7 @@ export function HeroVideo({ controls }: HeroVideoProps) {
         controls.triangleCenterX,
         controls.triangleCenterY,
         controls.triangleRotationRad,
-        3,
+        tile_count,
         controls.hueRotation,
         vs,
       );
@@ -293,13 +311,11 @@ export function HeroVideo({ controls }: HeroVideoProps) {
       if (debugStartedAtRef.current === null) {
         debugStartedAtRef.current = now;
       }
-
       setDebugNow(now);
       raf = requestAnimationFrame(tick);
     }
 
     raf = requestAnimationFrame(tick);
-
     return () => cancelAnimationFrame(raf);
   }, []);
 
@@ -321,15 +337,18 @@ export function HeroVideo({ controls }: HeroVideoProps) {
     );
   }
 
+  const aspectStyle = { aspectRatio: `${width} / ${height}` };
+
   return (
     <>
       <img
         src="https://hephaestus.alteredbrainchemistry.com/images/kaleidomo-first-frame.jpg"
         alt=""
         aria-hidden="true"
+        style={{ ...aspectStyle, pointerEvents: "none" }}
         className="
           absolute left-1/2 top-1/2
-          aspect-video h-full min-h-full min-w-full w-auto
+          h-full min-h-full min-w-full w-auto
           -translate-x-1/2 -translate-y-1/2
           object-cover
           max-md:h-screen max-md:w-auto max-md:rotate-90
@@ -339,10 +358,9 @@ export function HeroVideo({ controls }: HeroVideoProps) {
         ref={canvasRef}
         aria-label="Abstract Altered Brain Chemistry hero background"
         aria-hidden="true"
-        style={{ pointerEvents: "none" }}
+        style={{ ...aspectStyle, pointerEvents: "none" }}
         className="
           absolute left-1/2 top-1/2
-          aspect-video
           h-full min-h-full min-w-full w-auto
           -translate-x-1/2 -translate-y-1/2
           object-cover

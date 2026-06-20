@@ -8,9 +8,31 @@ import type { Product, InventoriedProduct } from "@/types/content"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { mediaURL } from "@/lib/mediaURL"
+import { HeroVideo } from "@/components/HeroVideo"
+import type { HeroKaleidoControls } from "@/app/page"
 
 // Shop page metadata is set in a separate layout / via generateMetadata on the
 // server version if needed; this page is client-rendered for filtering.
+
+// ── Kaleidomo card dimensions ─────────────────────────────────────────────
+// Grid: max-w-5xl (1024px) − px-6×2 (48px) = 976px usable.
+// 3-col with gap-5 (20px): card width = (976 − 40) / 3 ≈ 312px.
+// Card thumbnail is aspect-[16/9]: height = 312 × 9/16 ≈ 176px.
+// These become the WASM canvas resolution. The parent div's aspect-[16/9] +
+// HeroVideo's absolute-fill layout handles every breakpoint automatically
+// (1-col mobile, 2-col sm, 3-col lg) via CSS — no JS resize needed.
+const KALEIDO_CANVAS_W = 312
+const KALEIDO_CANVAS_H = 176
+
+const KALEIDO_CONTROLS: HeroKaleidoControls = {
+  animationDuration:     100,
+  hueRotation:           308,
+  triangleCenterX:       515.1039592844847,
+  triangleCenterY:       755.3734001945962,
+  triangleRotationRad:   6.22,
+  reorientationDuration: 64 * Math.PI,
+  reorientationFn:       "sin",
+}
 
 type SortKey = "newest" | "oldest" | "az" | "za"
 
@@ -24,7 +46,39 @@ interface ShopItem {
   dateAdded?: string
 }
 
+// Replaces the static thumbnail for the kaleidomo card with the live WASM
+// canvas, matching the pattern used on downloads/[slug]/page.tsx.
+function KaleidoShopCard({ item }: { item: ShopItem }) {
+  return (
+    <Link
+      href={item.href}
+      className="group rounded-xl border overflow-hidden hover:bg-muted/30 transition-colors"
+    >
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-black">
+        <HeroVideo
+          controls={KALEIDO_CONTROLS}
+          width={KALEIDO_CANVAS_W}
+          height={KALEIDO_CANVAS_H}
+        />
+      </div>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="font-medium group-hover:underline underline-offset-4">{item.name}</div>
+          {item.badge}
+        </div>
+        {item.shortDescription && (
+          <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
+            {item.shortDescription}
+          </div>
+        )}
+      </div>
+    </Link>
+  )
+}
+
 function ShopCard({ item }: { item: ShopItem }) {
+  if (item.slug === "kaleidomo") return <KaleidoShopCard item={item} />
+
   const thumbSrc = mediaURL(item.thumbnailUrl)
   return (
     <Link

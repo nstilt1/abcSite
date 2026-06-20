@@ -20,6 +20,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        // Proxy the kaleidoscope source image so the WASM fetch stays same-origin.
+        // On localhost the remote server doesn't send CORS headers, so a direct
+        // fetch from the WASM runtime fails. In production (Amplify) the request
+        // goes to the same domain and this rewrite is a no-op passthrough.
+        source: "/wasm-assets/og-pink-flower-comp-3.jpg",
+        destination:
+          "https://hephaestus.alteredbrainchemistry.com/images/og-pink-flower-comp-3.jpg",
+      },
+    ];
+  },
   async headers() {
     return [
       {
