@@ -1,19 +1,7 @@
 // src/app/api/checkout/webhook/route.ts
-//
-// Receives Stripe webhook events.  On `checkout.session.completed`:
-//   1. Reassembles the user's Cognito idToken from Stripe session metadata
-//   2. Calls abc_software_licensor_dispatcher → CreateLicense using that token
-//   3. If CreateLicense fails for a non-free item, issues a Stripe refund
-//
-// Required env vars:
-//   STRIPE_SECRET_KEY               – sk_live_… / sk_test_…
-//   STRIPE_WEBHOOK_SECRET           – whsec_… (from Stripe dashboard)
-//   SOFTWARE_LICENSOR_DISPATCH_API  – URL of the licensor lambda via API Gateway
 
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LicenseRequestMeta {
   productId: string
@@ -27,8 +15,6 @@ interface CreateLicenseRequestJson {
   license_type: "perpetual" | "trial" | "subscription"
   quantity: number
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -63,8 +49,6 @@ async function dispatchCreateLicense(params: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Use the user's own Cognito idToken — this passes the Cognito
-        // authorizer on API Gateway, same as a browser request would.
         Authorization: `Bearer ${params.idToken}`,
       },
       body: JSON.stringify(body),
@@ -96,8 +80,6 @@ async function refundItems(
   })
 }
 
-// ── Webhook raw body ──────────────────────────────────────────────────────────
-
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
@@ -124,10 +106,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
-  // ── Handle checkout.session.completed ─────────────────────────────────────
-
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session
+
+    // Log everything we have so we can see exactly what's in the session
+    console.log("[webhook] checkout.session.completed", session.id, {
+      hasLicenseRequests: !!session.metadata?.license_requests,
+      hasIdToken1: !!session.metadata?.id_token_1,
+      hasIdToken2: !!session.metadata?.id_token_2,
+      hasIdToken3: !!session.metadata?.id_token_3,
+      metadataKeys: Object.keys(session.metadata ?? {}),
+      customerEmail: session.customer_email,
+      amountTotal: session.amount_total,
+    })
 
     const licenseRequestsRaw = session.metadata?.license_requests
     const customerEmail = session.customer_email ?? ""
@@ -136,21 +127,29 @@ export async function POST(req: NextRequest) {
         ? session.payment_intent
         : session.payment_intent?.id ?? ""
 
-    // Reassemble the idToken from the three metadata parts stored at checkout
     const idToken = [
       session.metadata?.id_token_1 ?? "",
       session.metadata?.id_token_2 ?? "",
       session.metadata?.id_token_3 ?? "",
     ].join("")
 
-    if (!idToken || !licenseRequestsRaw) {
-      console.warn("[webhook] Missing metadata on session", session.id)
+    if (!licenseRequestsRaw) {
+      console.error("[webhook] Missing license_requests metadata on session", session.id)
       return NextResponse.json({ received: true })
     }
 
-    // Sanity-check the token has the right shape (3 base64url segments)
+    if (!idToken) {
+      console.error("[webhook] Missing idToken metadata on session", session.id,
+        "— was create-session deployed with the id_token_* fields?")
+      return NextResponse.json({ received: true })
+    }
+
     if (idToken.split(".").length !== 3) {
-      console.error("[webhook] Reassembled idToken is malformed for session", session.id)
+      console.error("[webhook] Reassembled idToken is malformed", {
+        sessionId: session.id,
+        tokenLength: idToken.length,
+        segments: idToken.split(".").length,
+      })
       return NextResponse.json({ received: true })
     }
 
@@ -158,7 +157,7 @@ export async function POST(req: NextRequest) {
     try {
       licenseRequestsMeta = JSON.parse(licenseRequestsRaw) as LicenseRequestMeta[]
     } catch {
-      console.error("[webhook] Could not parse license_requests metadata")
+      console.error("[webhook] Could not parse license_requests metadata:", licenseRequestsRaw)
       return NextResponse.json({ received: true })
     }
 
@@ -172,6 +171,12 @@ export async function POST(req: NextRequest) {
       quantity: 1,
     }))
 
+    console.log("[webhook] Calling dispatchCreateLicense", {
+      sessionId: session.id,
+      licenseRequests,
+      customerEmail,
+    })
+
     const result = await dispatchCreateLicense({
       idToken,
       orderId: session.id,
@@ -180,23 +185,19 @@ export async function POST(req: NextRequest) {
     })
 
     if (!result.ok) {
-      console.error("[webhook] CreateLicense failed for session", session.id, result.error)
+      console.error("[webhook] CreateLicense failed", { sessionId: session.id, error: result.error })
 
       if (paymentIntentId && session.amount_total && session.amount_total > 0) {
         try {
-          await refundItems(
-            stripe,
-            paymentIntentId,
-            session.amount_total,
-            `License provisioning failed: ${result.error ?? "unknown"}`
-          )
-          console.log("[webhook] Issued refund for", session.amount_total, "cents on session", session.id)
+          await refundItems(stripe, paymentIntentId, session.amount_total,
+            `License provisioning failed: ${result.error ?? "unknown"}`)
+          console.log("[webhook] Refund issued", { sessionId: session.id, cents: session.amount_total })
         } catch (refundErr) {
           console.error("[webhook] Refund failed:", refundErr)
         }
       }
     } else {
-      console.log("[webhook] License created for session", session.id)
+      console.log("[webhook] License created successfully", { sessionId: session.id })
     }
   }
 
