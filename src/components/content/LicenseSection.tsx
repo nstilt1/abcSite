@@ -138,11 +138,7 @@ export default function LicenseSection({ download, variant = "page" }: LicenseSe
                       <CheckCircle className="size-4 text-green-500 mt-0.5 shrink-0" />
                     )}
                   </div>
-                  {entry.priceId && (
-                    <p className="mt-2 font-mono text-[10px] text-muted-foreground truncate">
-                      {entry.priceId}
-                    </p>
-                  )}
+
                 </button>
               )
             })}

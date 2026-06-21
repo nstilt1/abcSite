@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useCart, type CartItem } from "@/hooks/useCart"
 import { dispatchSoftwareLicensor } from "@/lib/softwareLicensor/client"
-import type { LicenseResponse } from "@/lib/softwareLicensor/types"
+import type { LicenseResponse, CreateLicenseRequestJson } from "@/lib/softwareLicensor/types"
 import { RequireAuth } from "@/components/RequireAuth"
 import { fetchAuthSession } from "aws-amplify/auth"
 import { useAuthState } from "@/hooks/useAuthState"
@@ -28,19 +28,14 @@ function formatCents(cents: number): string {
 // ── Validation ────────────────────────────────────────────────────────────────
 
 interface ValidationResult {
-  /** items that are OK to purchase */
   valid: CartItem[]
-  /** items the user already owns a perpetual license for */
   alreadyOwned: CartItem[]
   error: string | null
 }
 
 async function validateCart(items: CartItem[]): Promise<ValidationResult> {
-  // Only trial licenses need to be checked — perpetual duplicates are blocked
-  const trialItems = items.filter(
-    (i) => i.licenseType.toLowerCase() === "trial"
-  )
-
+  // Only need to check existing licenses when there are trial items in the cart
+  const trialItems = items.filter((i) => i.licenseType.toLowerCase() === "trial")
   if (trialItems.length === 0) {
     return { valid: items, alreadyOwned: [], error: null }
   }
@@ -49,8 +44,7 @@ async function validateCart(items: CartItem[]): Promise<ValidationResult> {
   try {
     license = await dispatchSoftwareLicensor<LicenseResponse>({ action: "GetLicense" })
   } catch {
-    // If GetLicense fails (no existing license, network error) we proceed.
-    // A definitive "no license exists" error is fine — let checkout continue.
+    // 404 = user has no license yet, or network error — proceed either way
     return { valid: items, alreadyOwned: [], error: null }
   }
 
@@ -61,10 +55,7 @@ async function validateCart(items: CartItem[]): Promise<ValidationResult> {
   const valid: CartItem[] = []
 
   for (const item of items) {
-    if (
-      item.licenseType.toLowerCase() === "trial" &&
-      owned.has(item.productId)
-    ) {
+    if (item.licenseType.toLowerCase() === "trial" && owned.has(item.productId)) {
       alreadyOwned.push(item)
     } else {
       valid.push(item)
@@ -74,10 +65,10 @@ async function validateCart(items: CartItem[]): Promise<ValidationResult> {
   return { valid, alreadyOwned, error: null }
 }
 
-// ── Inner checkout component (inside RequireAuth) ─────────────────────────────
+// ── Inner checkout component ──────────────────────────────────────────────────
 
 function InnerCheckoutPage() {
-  const { items, cartTotalCents, removeItem } = useCart()
+  const { items, clearCart } = useCart()
   const router = useRouter()
 
   const [validating, setValidating] = useState(true)
@@ -86,7 +77,6 @@ function InnerCheckoutPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const { account } = useAuthState()
 
-  // Validate on mount
   useEffect(() => {
     if (items.length === 0) {
       router.replace("/cart")
@@ -96,7 +86,7 @@ function InnerCheckoutPage() {
       setValidation(result)
       setValidating(false)
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleCheckout() {
@@ -104,21 +94,53 @@ function InnerCheckoutPage() {
     setSubmitting(true)
     setSubmitError(null)
 
-    try {
-      const session = await fetchAuthSession();   // from "aws-amplify/auth"
-        const token = session.tokens?.idToken?.toString();
+    const validItems = validation.valid
+    const totalCents = validItems.reduce((s, i) => s + i.priceCents, 0)
+    const hasPriceIds = validItems.some((i) => i.priceId?.trim())
 
-        const res = await fetch("/api/checkout/create-session", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ 
-                items: validation.valid,
-                customerEmail: account?.email ?? "",
-            }),
-        });
+    try {
+      const session = await fetchAuthSession()
+      const token = session.tokens?.idToken?.toString()
+      if (!token) throw new Error("Not signed in")
+
+      // ── Free items: call CreateLicense directly, no Stripe needed ────────
+      if (totalCents === 0 || !hasPriceIds) {
+        const licenseRequests: CreateLicenseRequestJson[] = validItems.map((item) => ({
+          product_id: item.productId,
+          license_type: item.licenseType.toLowerCase() as "perpetual" | "trial" | "subscription",
+          quantity: 1,
+        }))
+
+        await dispatchSoftwareLicensor({
+          action: "CreateLicense",
+          data: {
+            customer_first_name: "",
+            customer_last_name: "",
+            customer_email: account?.email ?? "",
+            order_id: `free_${Date.now()}`,
+            custom_success_message: "Thank you!",
+            license_requests: licenseRequests,
+          },
+        })
+
+        clearCart()
+        router.push("/checkout/success")
+        return
+      }
+
+      // ── Paid items: go through Stripe, webhook handles CreateLicense ─────
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ""
+      const res = await fetch("/api/checkout/create-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          items: validItems,
+          customerEmail: account?.email ?? "",
+        }),
+      })
 
       if (!res.ok) {
         const { error } = (await res.json().catch(() => ({}))) as { error?: string }
@@ -126,7 +148,6 @@ function InnerCheckoutPage() {
       }
 
       const { url } = (await res.json()) as { url: string }
-      // Redirect to Stripe Checkout (full-page redirect)
       window.location.href = url
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Checkout failed")
@@ -150,7 +171,6 @@ function InnerCheckoutPage() {
     <main className="mx-auto max-w-2xl px-6 py-12">
       <h1 className="text-2xl font-semibold mb-8">Checkout</h1>
 
-      {/* Already-owned warnings */}
       {alreadyOwned.length > 0 && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="size-4" />
@@ -158,20 +178,11 @@ function InnerCheckoutPage() {
           <AlertDescription className="space-y-1 mt-1">
             <p>
               You already have a trial license for the following product
-              {alreadyOwned.length > 1 ? "s" : ""}. They have been removed from
-              your order:
+              {alreadyOwned.length > 1 ? "s" : ""}:
             </p>
             <ul className="list-disc pl-4 text-sm">
               {alreadyOwned.map((item) => (
-                <li key={item.productId}>
-                  {item.name}{" "}
-                  <button
-                    className="underline"
-                    onClick={() => removeItem(item.productId)}
-                  >
-                    Remove from cart
-                  </button>
-                </li>
+                <li key={item.productId}>{item.name}</li>
               ))}
             </ul>
           </AlertDescription>
@@ -188,7 +199,6 @@ function InnerCheckoutPage() {
         </div>
       ) : (
         <>
-          {/* Order summary */}
           <div className="rounded-xl border divide-y">
             {valid.map((item) => (
               <div
@@ -233,7 +243,7 @@ function InnerCheckoutPage() {
               {submitting ? (
                 <><Loader2 className="size-4 animate-spin" /> {validTotal === 0 ? "Processing…" : "Redirecting to Stripe…"}</>
               ) : validTotal === 0 ? (
-                <><CheckCircle className="size-4" /> Proceed</>
+                <><CheckCircle className="size-4" /> Get License</>
               ) : (
                 <><CheckCircle className="size-4" /> Pay with Stripe</>
               )}
@@ -245,8 +255,8 @@ function InnerCheckoutPage() {
 
           <p className="mt-4 text-xs text-muted-foreground">
             {validTotal === 0
-              ? "No payment is required. Licenses are provisioned automatically once you proceed."
-              : "You will be redirected to Stripe to complete payment. Licenses are provisioned automatically once payment succeeds. If license creation fails for any paid item, a full refund is issued automatically."}
+              ? "No payment required. Your license will be created immediately."
+              : "You will be redirected to Stripe to complete payment. Licenses are provisioned automatically once payment succeeds. If license creation fails, a full refund is issued automatically."}
           </p>
         </>
       )}

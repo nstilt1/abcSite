@@ -66,13 +66,7 @@ export default function CartPage() {
                 <Badge variant="secondary" className="text-xs">
                   {item.licenseType}
                 </Badge>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  Product: {item.productId}
-                </span>
               </div>
-              <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                {item.priceId}
-              </p>
             </div>
 
             <div className="flex flex-col items-end gap-2 shrink-0">
