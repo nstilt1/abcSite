@@ -33,7 +33,7 @@ function RequireAuthInner({ children }: RequireAuthProps) {
           const query = searchParams.toString();
           const redirectTo = query ? `${pathname}?${query}` : pathname;
 
-          router.replace(`/auth?redirect=${encodeURIComponent(redirectTo)}`);
+          router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
           return;
         }
 
@@ -44,7 +44,7 @@ function RequireAuthInner({ children }: RequireAuthProps) {
         const query = searchParams.toString();
         const redirectTo = query ? `${pathname}?${query}` : pathname;
 
-        router.replace(`/auth?redirect=${encodeURIComponent(redirectTo)}`);
+        router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
       }
     }
 

@@ -1,7 +1,10 @@
 "use client";
 
-import { Authenticator, CheckboxField } from "@aws-amplify/ui-react";
+import { Suspense } from "react";
+import { Authenticator, CheckboxField, useAuthenticator } from "@aws-amplify/ui-react";
 import "@aws-amplify/ui-react/styles.css";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
 const components = {
   SignUp: {
@@ -9,7 +12,6 @@ const components = {
       return (
         <>
           <Authenticator.SignUp.FormFields />
-
           <CheckboxField
             name="custom:newsletterOptIn"
             label="Join the mailing list"
@@ -22,6 +24,24 @@ const components = {
     },
   },
 };
+
+function RedirectAfterSignIn() {
+  const { authStatus } = useAuthenticator((ctx) => [ctx.authStatus]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    const redirectTo = searchParams.get("redirect");
+    if (redirectTo && redirectTo.startsWith("/")) {
+      router.replace(redirectTo);
+    } else {
+      router.replace("/");
+    }
+  }, [authStatus, router, searchParams]);
+
+  return null;
+}
 
 export default function RegisterPage() {
   return (
@@ -37,7 +57,11 @@ export default function RegisterPage() {
           initialState="signUp"
           loginMechanisms={["email"]}
           components={components}
-        />
+        >
+          <Suspense>
+            <RedirectAfterSignIn />
+          </Suspense>
+        </Authenticator>
       </div>
     </main>
   );
