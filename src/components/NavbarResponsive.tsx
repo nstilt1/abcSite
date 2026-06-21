@@ -177,7 +177,7 @@ export default function NavbarResponsive() {
         navVisible ? "translate-y-0" : "-translate-y-full"
       }`}
     >
-      <div className="mx-auto flex h-20 w-full max-w-7xl items-center overflow-visible px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-20 w-full max-w-7xl items-center overflow-visible px-6 md:px-8">
         <Link
           href="/"
           className="group inline-flex shrink-0 items-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -189,7 +189,7 @@ export default function NavbarResponsive() {
               alt="Altered Brain Chemistry logo"
               fill
               sizes="(max-width: 640px) 200px, (max-width: 768px) 240px, 300px"
-              className="object-contain abc-logo-cycle"
+              className="object-contain object-left abc-logo-cycle"
               priority
             />
           </div>

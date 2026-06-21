@@ -174,9 +174,19 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--default-font-family);
   }
   html {
     @apply font-sans;
+    /* Amplify's stylesheet (loaded on /login and persisted for the session)
+       sets `font-family` on `html, [data-amplify-theme]`. Declaring it here
+       inside @layer base means our rule is in the cascade layer and will be
+       re-asserted on every render, but that's still not enough because
+       unlayered Amplify rules beat @layer rules by default.
+       The actual fix: override with !important scoped only to font-family
+       on html and body — this is the minimum force needed to beat an
+       unlayered third-party stylesheet without affecting anything else.  */
+    font-family: var(--default-font-family) !important;
   }
 }
 

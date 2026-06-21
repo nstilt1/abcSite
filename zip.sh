@@ -14,6 +14,7 @@ zip -r frontend.zip ./frontend \
   -i "*/*.sh" \
   -i "*/*.md" \
   -i "*/*.yml" \
+  -i "*/*.css" \
   -x "*/wasm/*" \
   -x "*/node_modules/*" \
   -x "*/amplify_backup/*" \
