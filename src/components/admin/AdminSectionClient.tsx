@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/table"
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AdminDialogContent } from "@/components/admin/AdminDialogContent"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -480,7 +480,7 @@ export default function AdminSectionClient({
           if (!open) setEditingItem(null)
         }}
       >
-        <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <AdminDialogContent>
           <DialogHeader>
             <DialogTitle>
               Edit Item
@@ -502,7 +502,7 @@ export default function AdminSectionClient({
               />
             )}
           </div>
-        </DialogContent>
+        </AdminDialogContent>
       </Dialog>
     </>
   )
