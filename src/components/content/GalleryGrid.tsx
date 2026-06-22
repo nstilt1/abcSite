@@ -124,6 +124,9 @@ export default function GalleryGrid({ items, basePath }: GalleryGridProps) {
                       controls={KALEIDO_CONTROLS}
                       width={KALEIDO_CANVAS_W}
                       height={KALEIDO_CANVAS_H}
+                      zoom_max={0.009}
+                      zoom_min={0.009}
+                      offset_x={80}
                     />
                   </div>
                 ) : thumbSrc ? (

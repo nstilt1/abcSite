@@ -83,7 +83,21 @@ function finiteOr(value: number, fallback: number) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls) {
+// Zoom and offset defaults — extracted as constants so callers can import
+// them as a baseline when they only want to override one value.
+export const HERO_VIDEO_DEFAULTS = {
+  zoom_max: 0.9090958991783823,
+  zoom_min: 0.85,
+  offset_x: 354,
+  offset_y: 0,
+} as const;
+
+function applyVideoSettings(
+  vs: WasmVideoSettings,
+  controls: HeroKaleidoControls,
+  zoom_max: number,
+  zoom_min: number,
+) {
   const animationDuration = Math.max(
     0.001,
     finiteOr(controls.animationDuration, 100),
@@ -102,8 +116,8 @@ function applyVideoSettings(vs: WasmVideoSettings, controls: HeroKaleidoControls
   vs.rotation_start_offset = 0;
   vs.set_rotation_fn("sin2");
 
-  vs.zoom_max = 0.9090958991783823;
-  vs.zoom_min = 0.85;
+  vs.zoom_max = zoom_max;
+  vs.zoom_min = zoom_min;
   vs.zoom_start_offset = 0;
   vs.num_zoom_loops = 4;
   vs.set_zoom_fn("sin");
@@ -129,9 +143,38 @@ type HeroVideoProps = {
   height?: number;
   /** Number of kaleidoscope tiles. Passed to start_animation / update_animation_settings. Defaults to 3. */
   tile_count?: number;
+  /**
+   * Maximum zoom level for the zoom oscillation cycle.
+   * Must be >= zoom_min. Defaults to 0.9090958991783823.
+   */
+  zoom_max?: number;
+  /**
+   * Minimum zoom level for the zoom oscillation cycle.
+   * Must be <= zoom_max. Defaults to 0.85.
+   */
+  zoom_min?: number;
+  /**
+   * Horizontal pixel offset into the source image.
+   * Shifts the crop window left/right. Defaults to 354.
+   */
+  offset_x?: number;
+  /**
+   * Vertical pixel offset into the source image.
+   * Shifts the crop window up/down. Defaults to 0.
+   */
+  offset_y?: number;
 };
 
-export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 3 }: HeroVideoProps) {
+export function HeroVideo({
+  controls,
+  width = 1920,
+  height = 1080,
+  tile_count = 3,
+  zoom_max = HERO_VIDEO_DEFAULTS.zoom_max,
+  zoom_min = HERO_VIDEO_DEFAULTS.zoom_min,
+  offset_x = HERO_VIDEO_DEFAULTS.offset_x,
+  offset_y = HERO_VIDEO_DEFAULTS.offset_y,
+}: HeroVideoProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef  = useRef<HTMLVideoElement | null>(null);
   const engineRef = useRef<LiveKaleidoscopeEngine | null>(null);
@@ -236,14 +279,14 @@ export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 
 
       const vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
       vsRef.current = vs;
-      applyVideoSettings(vs, controls);
+      applyVideoSettings(vs, controls, zoom_max, zoom_min);
 
       try {
         engineRef.current!.start_animation(
           24,
-          354,
-          0,
-          0.069,
+          offset_x,
+          offset_y,
+          0.069, // zoom
           1.1,
           controls.triangleCenterX,
           controls.triangleCenterY,
@@ -273,7 +316,7 @@ export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 
       // (or immediately if init() was cancelled before it acquired the lock).
       serialise(async () => teardown());
     };
-  }, [useVideoFallback, width, height, tile_count]);
+  }, [useVideoFallback, width, height, tile_count, zoom_max, zoom_min, offset_x, offset_y]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -281,14 +324,14 @@ export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 
 
     if (!engine || !vs || useVideoFallback) return;
 
-    applyVideoSettings(vs, controls);
+    applyVideoSettings(vs, controls, zoom_max, zoom_min);
 
     try {
       engine.update_animation_settings(
         24,
-        354,
-        0,
-        0.069,
+        offset_x,
+        offset_y,
+        0.069, // zoom
         1.1,
         controls.triangleCenterX,
         controls.triangleCenterY,
@@ -300,7 +343,7 @@ export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 
     } catch (e) {
       debugLog("Failed to update hero controls:", e);
     }
-  }, [controls, useVideoFallback]);
+  }, [controls, useVideoFallback, zoom_max, zoom_min, offset_x, offset_y]);
 
   useEffect(() => {
     if (!DEBUG) return;
@@ -396,6 +439,8 @@ export function HeroVideo({ controls, width = 1920, height = 1080, tile_count = 
                   controls.reorientationDuration
                 ).toFixed(4)}
           </div>
+          <div>zoom: {zoom_min.toFixed(4)} – {zoom_max.toFixed(4)}</div>
+          <div>offset: ({offset_x}, {offset_y})</div>
         </div>
       )}
     </>

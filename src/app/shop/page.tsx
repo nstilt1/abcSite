@@ -59,6 +59,9 @@ function KaleidoShopCard({ item }: { item: ShopItem }) {
           controls={KALEIDO_CONTROLS}
           width={KALEIDO_CANVAS_W}
           height={KALEIDO_CANVAS_H}
+          offset_x={80}
+          zoom_max={0.3}
+          zoom_min={0.2}
         />
       </div>
       <div className="p-4">
