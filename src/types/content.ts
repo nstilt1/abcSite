@@ -141,9 +141,13 @@ export interface Blog {
   slug: string
   tiptap: object
   thumbnailUrl?: string
+  heroImageUrl?: string
   shortDescription?: string
   keywords: string[]
+  /** ISO 8601 datetime string (UTC), e.g. "2025-06-23T14:30:00.000Z" */
   date: string
+  /** Display name of the author at publish time */
+  author?: string
 }
 
 // ─── Admin section registry ───────────────────────────────────────────────────
