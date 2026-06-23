@@ -1,6 +1,5 @@
 import { getCollection } from "@/lib/contentStore"
 import GalleryGrid from "@/components/content/GalleryGrid"
-import type { Blog } from "@/types/content"
 import type { Metadata } from "next"
 
 export const dynamic = "force-static"
@@ -10,8 +9,19 @@ export const metadata: Metadata = {
   description: "Articles and posts.",
 }
 
+interface BlogRecord {
+  slug: string
+  name: string
+  shortDescription?: string
+  date?: string
+  author?: string
+  keywords?: string[]
+  thumbnailUrl?: string
+  heroImageUrl?: string
+}
+
 export default function BlogsPage() {
-  const blogs = getCollection("blogs") as Blog[]
+  const blogs = getCollection("blogs") as BlogRecord[]
 
   const items = blogs.map((b) => ({
     slug: b.slug,
@@ -19,6 +29,8 @@ export default function BlogsPage() {
     shortDescription: b.shortDescription,
     thumbnailUrl: b.thumbnailUrl,
     dateAdded: b.date,
+    author: b.author,
+    publishedAt: b.date,
   }))
 
   return (
