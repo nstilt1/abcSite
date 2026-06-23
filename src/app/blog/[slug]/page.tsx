@@ -1,35 +1,83 @@
-import { getCollection } from "@/lib/contentStore"
-import GalleryGrid from "@/components/content/GalleryGrid"
+import { notFound } from "next/navigation"
+import Image from "next/image"
+import { getCollection, getItem } from "@/lib/contentStore"
+import { tiptapDocToHtml } from "@/lib/tiptapToHtml"
+import { Badge } from "@/components/ui/badge"
 import type { Blog } from "@/types/content"
 import type { Metadata } from "next"
+import PublishedMeta from "./PublishedMeta"
 
 export const dynamic = "force-static"
 
-export const metadata: Metadata = {
-  title: "Blog",
-  description: "Articles and posts.",
+export function generateStaticParams() {
+  return (getCollection("blogs") as Blog[]).map((b) => ({ slug: b.slug }))
 }
 
-export default function BlogsPage() {
-  const blogs = getCollection("blogs") as Blog[]
+export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
+  const item = getItem("blogs", params.slug) as Blog | null
+  if (!item) return {}
+  return {
+    title: item.name,
+    description: item.shortDescription ?? "",
+    keywords: item.keywords,
+  }
+}
 
-  const items = blogs.map((b) => ({
-    slug: b.slug,
-    name: b.name,
-    shortDescription: b.shortDescription,
-    thumbnailUrl: b.thumbnailUrl,
-    dateAdded: b.date,
-    author: b.author,
-    publishedAt: b.date,
-  }))
+export default function BlogSlugPage({ params }: { params: { slug: string } }) {
+  const item = getItem("blogs", params.slug) as Blog | null
+  if (!item) notFound()
+
+  const bodyHtml = tiptapDocToHtml(item.tiptap as object)
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="text-3xl font-semibold">Blog</h1>
-      <p className="mt-2 text-muted-foreground">
-        Articles, updates, and guides.
-      </p>
-      <GalleryGrid items={items} basePath="/blog" />
+    <main className="mx-auto max-w-3xl px-6 py-10">
+      <header className="mb-8">
+        {/* Title */}
+        <h1 className="text-4xl font-bold leading-tight tracking-tight">{item.name}</h1>
+
+        {/* By [author] · [date in user timezone] — rendered client-side for TZ */}
+        {(item.author || item.date) && (
+          <PublishedMeta isoDate={item.date} author={item.author} />
+        )}
+
+        {/* Short description */}
+        {item.shortDescription && (
+          <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
+            {item.shortDescription}
+          </p>
+        )}
+
+        {/* Keywords */}
+        {item.keywords?.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {item.keywords.map((kw) => (
+              <Badge key={kw} variant="outline" className="text-xs">
+                {kw}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </header>
+
+      {/* Hero image */}
+      {item.heroImageUrl && (
+        <div className="mb-8 overflow-hidden rounded-xl">
+          <Image
+            src={item.heroImageUrl}
+            alt={item.name}
+            width={900}
+            height={500}
+            className="w-full object-cover"
+            priority
+          />
+        </div>
+      )}
+
+      {/* Body content */}
+      <article
+        className="prose prose-neutral dark:prose-invert max-w-none"
+        dangerouslySetInnerHTML={{ __html: bodyHtml }}
+      />
     </main>
   )
 }
