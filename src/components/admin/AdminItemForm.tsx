@@ -514,13 +514,55 @@ function BlogFields({
 }) {
   const keywords = (data.keywords as string[]) ?? []
 
+  // Convert stored UTC ISO string → datetime-local value (local time)
+  const storedDate = (data.date as string) ?? ""
+  const localDatetimeValue = storedDate
+    ? (() => {
+        const d = new Date(storedDate)
+        // Format as YYYY-MM-DDTHH:mm in local time for the datetime-local input
+        const pad = (n: number) => String(n).padStart(2, "0")
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+      })()
+    : ""
+
+  function handleDatetimeChange(localValue: string) {
+    if (!localValue) { set("date", ""); return }
+    // new Date(datetime-local string) interprets as local time → UTC ISO
+    set("date", new Date(localValue).toISOString())
+  }
+
   return (
     <>
       <FieldRow label="Name" value={(data.name as string) ?? ""} onChange={(v) => set("name", v)} />
       <FieldRow label="Slug" value={(data.slug as string) ?? ""} onChange={(v) => set("slug", v)} />
+      <FieldRow label="Author" value={(data.author as string) ?? ""} onChange={(v) => set("author", v)} placeholder="Display name shown on the post" />
       <FieldRow label="Short Description" value={(data.shortDescription as string) ?? ""} onChange={(v) => set("shortDescription", v)} />
-      <FieldRow label="Date" value={(data.date as string) ?? ""} onChange={(v) => set("date", v)} type="date" />
+
+      {/* Published datetime with "Set to now" button */}
+      <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+        <Label className="text-right text-sm font-medium text-muted-foreground">Published At</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="datetime-local"
+            value={localDatetimeValue}
+            onChange={(e) => handleDatetimeChange(e.target.value)}
+            className="h-9 flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => set("date", new Date().toISOString())}
+            className="shrink-0 whitespace-nowrap"
+          >
+            Set to now
+          </Button>
+        </div>
+      </div>
+
       <FieldRow label="Thumbnail URL" value={(data.thumbnailUrl as string) ?? ""} onChange={(v) => set("thumbnailUrl", v)} />
+      <FieldRow label="Hero Image URL" value={(data.heroImageUrl as string) ?? ""} onChange={(v) => set("heroImageUrl", v)} />
+
       <div className="grid grid-cols-[180px_1fr] items-start gap-4">
         <Label className="text-right pt-2 text-sm font-medium text-muted-foreground">Keywords</Label>
         <div className="space-y-2">
@@ -718,7 +760,9 @@ function getDefaultItem(section: AdminSection): Record<string, unknown> {
         slug: "",
         tiptap: null,
         thumbnailUrl: "",
+        heroImageUrl: "",
         shortDescription: "",
+        author: "",
         keywords: [],
         date: "",
       }

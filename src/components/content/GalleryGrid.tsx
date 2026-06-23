@@ -15,6 +15,10 @@ export interface GalleryItem {
   thumbnailUrl?: string
   /** ISO date string used for date-based sorting (dateAdded or date) */
   dateAdded?: string
+  /** Optional author name — shown in card footer when provided */
+  author?: string
+  /** ISO date string to display as publish date — shown in card footer when provided */
+  publishedAt?: string
 }
 
 interface GalleryGridProps {
@@ -150,6 +154,20 @@ export default function GalleryGrid({ items, basePath }: GalleryGridProps) {
                     {item.shortDescription}
                   </div>
                 ) : null}
+                {(item.author || item.publishedAt) && (
+                  <div className="mt-2 text-xs text-muted-foreground flex flex-wrap gap-x-2">
+                    {item.author && <span>By {item.author}</span>}
+                    {item.publishedAt && (
+                      <span>
+                        {new Date(item.publishedAt).toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </Link>
           )

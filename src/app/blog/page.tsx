@@ -27,7 +27,7 @@ export default function BlogsPage() {
       <p className="mt-2 text-muted-foreground">
         Articles, updates, and guides.
       </p>
-      <GalleryGrid items={items} basePath="/blogs" />
+      <GalleryGrid items={items} basePath="/blog" />
     </main>
   )
 }
