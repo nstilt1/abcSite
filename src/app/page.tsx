@@ -218,7 +218,7 @@ export default function Home() {
     <div className="flex flex-col">
       <section className="relative flex min-h-[560px] w-full items-center overflow-hidden md:min-h-[720px]">
         <div className="absolute inset-0">
-          {heroSettingsLoaded && <HeroVideo controls={heroControls} />}
+          {heroSettingsLoaded && <HeroVideo controls={heroControls} rotate_for_mobile />}
 
           <div className="absolute left-4 top-4 z-20">
             <Sheet>

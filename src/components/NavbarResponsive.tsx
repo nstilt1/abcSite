@@ -383,7 +383,7 @@ export default function NavbarResponsive() {
                   <SheetTitle className="text-left">Navigation</SheetTitle>
                 </SheetHeader>
 
-                <div className="mt-6 flex flex-col gap-2">
+                <div className="mt-6 px-1 flex flex-col gap-1">
                   <Link href="/support-us" onClick={() => setMobileOpen(false)}>
                     <Button className="w-full justify-start gap-2 rounded-xl">
                       <Heart className="h-4 w-4" />
@@ -415,14 +415,14 @@ export default function NavbarResponsive() {
 
                 <Separator className="my-6" />
 
-                <div className="mb-3">
-                  <div className="text-sm font-medium">Resources</div>
-                  <div className="text-xs text-muted-foreground">
+                <div className="mb-2 px-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resources</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground/70">
                     Helpful links and downloads
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="px-1 flex flex-col gap-1">
                   {resourcesMenuItems.map((item) => {
                     const Icon = item.icon;
 
@@ -445,7 +445,7 @@ export default function NavbarResponsive() {
                   <>
                     <Separator className="my-6" />
 
-                    <div className="flex flex-col gap-2">
+                    <div className="px-1 flex flex-col gap-1">
                       {signedOutMenuItems.map((route) => {
                         const active = isActiveRoute(pathname, route.href);
 
@@ -472,16 +472,16 @@ export default function NavbarResponsive() {
                   <>
                     <Separator className="my-6" />
 
-                    <div className="mb-3">
-                      <div className="text-sm font-medium">
+                    <div className="mb-2 px-3">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {account?.displayName || "Signed in"}
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="mt-0.5 text-xs text-muted-foreground/70">
                         Account options
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div className="px-1 flex flex-col gap-1">
                       {visibleProfileItems.map((item) => {
                         const Icon = item.icon;
 

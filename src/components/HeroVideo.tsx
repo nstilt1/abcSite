@@ -163,6 +163,11 @@ type HeroVideoProps = {
    * Shifts the crop window up/down. Defaults to 0.
    */
   offset_y?: number;
+  /**
+   * When true, rotates the canvas/img/video 90° on mobile (max-md breakpoint).
+   * Defaults to false.
+   */
+  rotate_for_mobile?: boolean;
 };
 
 export function HeroVideo({
@@ -174,6 +179,7 @@ export function HeroVideo({
   zoom_min = HERO_VIDEO_DEFAULTS.zoom_min,
   offset_x = HERO_VIDEO_DEFAULTS.offset_x,
   offset_y = HERO_VIDEO_DEFAULTS.offset_y,
+  rotate_for_mobile = false,
 }: HeroVideoProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef  = useRef<HTMLVideoElement | null>(null);
@@ -368,7 +374,7 @@ export function HeroVideo({
         ref={videoRef}
         aria-label="Abstract Altered Brain Chemistry hero background"
         aria-hidden="true"
-        className="absolute left-0 top-0 h-full w-full object-cover"
+        className={`absolute left-0 top-0 h-full w-full object-cover${rotate_for_mobile ? " max-md:rotate-90" : ""}`}
         style={{ pointerEvents: "none" }}
         src={FALLBACK_VIDEO_URL}
         autoPlay
@@ -389,26 +395,26 @@ export function HeroVideo({
         alt=""
         aria-hidden="true"
         style={{ ...aspectStyle, pointerEvents: "none" }}
-        className="
+        className={`
           absolute left-1/2 top-1/2
           h-full min-h-full min-w-full w-auto
           -translate-x-1/2 -translate-y-1/2
           object-cover
-          max-md:h-screen max-md:w-auto max-md:rotate-90
-        "
+          ${rotate_for_mobile ? "max-md:h-screen max-md:w-auto max-md:rotate-90" : ""}
+        `}
       />
       <canvas
         ref={canvasRef}
         aria-label="Abstract Altered Brain Chemistry hero background"
         aria-hidden="true"
         style={{ ...aspectStyle, pointerEvents: "none" }}
-        className="
+        className={`
           absolute left-1/2 top-1/2
           h-full min-h-full min-w-full w-auto
           -translate-x-1/2 -translate-y-1/2
           object-cover
-          max-md:h-screen max-md:w-auto max-md:rotate-90
-        "
+          ${rotate_for_mobile ? "max-md:h-screen max-md:w-auto max-md:rotate-90" : ""}
+        `}
       />
       {process.env.NODE_ENV !== "production" && debugStartedAtRef.current !== null && (
         <div className="absolute bottom-4 left-4 z-50 rounded-lg bg-black/70 px-3 py-2 font-mono text-xs text-white">
