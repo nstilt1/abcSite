@@ -1,18 +1,44 @@
 "use client";
 
 /**
- * KaleidoPageClient
- * -----------------
- * Live, music-reactive kaleidoscope visualizer for /kaleidomo.
+ * KaleidoPageClient — /kaleidomo interactive visualizer
  *
- * Architecture:
- *  - WASM engine (LiveKaleidoscopeEngine) renders to a <canvas>
- *  - Audio is decoded via Web Audio API; per-frame peaks are fed to the engine
- *    via set_audio_peaks() so beat-pumping is 100 % frame-accurate
- *  - Circle motion (heroCircleLeft/Right/Y + desiredLeftRotation) is
- *    HARDCODED per preset; the X/Y/triangleRotation sliders are hidden
- *  - Controls panel mirrors the Kaleidomo desktop app grouping
- *  - Fullscreen: clicking or pressing any key while fullscreen exits it
+ * Three bugs fixed vs the previous version:
+ *
+ * 1. AUDIO / VISUAL SYNC
+ *    The WASM engine indexes audio peaks by frame_index % peaks.len().
+ *    frame_index starts counting from the moment start_animation() is called
+ *    and never stops — so if the page has been running for 30 s before the
+ *    user hits Play, frame_index is already ~900 frames ahead of peak[0].
+ *    Fix: record engineStartMsRef (performance.now() at start_animation)
+ *    and when beginning playback rotate the peaks array so that peak[0]
+ *    corresponds to the current engine frame, not the beginning of the song.
+ *    On pause/resume we account for the accumulated audio offset the same way.
+ *
+ * 2. QUEUE / SHUFFLE / REPEAT-ONE
+ *    Replaced the bare <select> + loop checkbox with a proper play-queue
+ *    system:  Sequential → plays tracks in order then stops;
+ *             Shuffle → randomises order each time;
+ *             Repeat-one → loops the current track indefinitely.
+ *    onended advances the queue or wraps depending on mode.
+ *    The current track title is shown in the HUD.
+ *
+ * 3. ANIMATION GLITCH — WRONG animation_duration VALUE
+ *    animation_duration is NOT a loop timer; it is the shared period over which
+ *    rotation_cycles sweeps of the rotation angle, num_zoom_loops zoom cycles,
+ *    and hue_cycles hue cycles all complete.  The WASM derives cycles-per-second
+ *    for rotation as  rotation_cycles / animation_duration  and for zoom as
+ *    num_zoom_loops / animation_duration.  All modulate_*_time functions then
+ *    compute  phase = elapsed * (cycles / animation_duration)  and call
+ *    rem_euclid(1.0) — so they loop continuously without any hard reset.
+ *
+ *    The glitch was caused by presetToControls hardcoding animationDuration: 400
+ *    instead of reading p.animationDuration from the preset.  At t=400 s the hue
+ *    phase (which uses the frame-based modulate()) completed exactly one full cycle
+ *    and visually snapped, because the wrong period made every oscillator run at
+ *    1/40th the intended speed.  Fix: read p.animationDuration from the preset and
+ *    pass it straight through to vs.animation_duration.  The value is preset-locked
+ *    and not exposed in the controls panel.
  */
 
 import {
@@ -31,7 +57,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 
-// ─── WASM singleton ──────────────────────────────────────────────────────────
+// ─── WASM singleton ───────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wasmModPromise: Promise<any> | null = null;
@@ -42,21 +68,13 @@ const KALEIDO_TYPE_IDX: number = 4;
 async function getWasmMod(): Promise<any> {
   if (!wasmModPromise) {
     wasmModPromise = (async () => {
-      const wasmJsUrl = "/wasm/kaleidomo_core.js";
-      const wasmBinUrl = new URL(
-        "/wasm/kaleidomo_core_bg.wasm",
-        window.location.origin,
-      );
+      const wasmJsUrl  = "/wasm/kaleidomo_core.js";
+      const wasmBinUrl = new URL("/wasm/kaleidomo_core_bg.wasm", window.location.origin);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod: any = await import(/* webpackIgnore: true */ wasmJsUrl);
-      await (mod.default as typeof import("@/wasm/kaleidomo_core").default)(
-        wasmBinUrl,
-      );
+      await (mod.default as typeof import("@/wasm/kaleidomo_core").default)(wasmBinUrl);
       return mod;
-    })().catch((e) => {
-      wasmModPromise = null;
-      throw e;
-    });
+    })().catch((e) => { wasmModPromise = null; throw e; });
   }
   return wasmModPromise;
 }
@@ -68,36 +86,36 @@ function serialise(fn: () => Promise<void>): Promise<void> {
   return next;
 }
 
-// ─── Source images (CloudFront / proxied) ────────────────────────────────────
+// ─── Source images ────────────────────────────────────────────────────────────
 
 const SOURCE_IMAGES: string[] = [
   // Proxied via next.config.ts rewrite → hephaestus.alteredbrainchemistry.com
   "/wasm-assets/og-pink-flower-comp-3.jpg",
-  // TODO: add your other CloudFront URLs here
   "/wasm-assets/white-flower-1.jpg",
   "/wasm-assets/pink-flower-2.jpg",
 ];
 
-// ─── Songs ───────────────────────────────────────────────────────────────────
+// ─── Songs ────────────────────────────────────────────────────────────────────
 
-interface Song {
-  title: string;
-  url: string;
-}
+interface Song { title: string; url: string; }
 
 const BUNDLED_SONGS: Song[] = [
-  { title: "Taking Off", url: "/wasm-assets/audio-1.wav" },
-  { title: "Airborne", url: "/wasm-assets/audio-2.wav" },
+  { title: "Taking Off",            url: "/wasm-assets/audio-1.wav" },
+  { title: "Airborne",              url: "/wasm-assets/audio-2.wav" },
   { title: "Suborbital Trajectory", url: "/wasm-assets/audio-3.wav" },
-  { title: "Black Hole", url: "/wasm-assets/audio-4.wav" },
-  { title: "Time Travel", url: "/wasm-assets/audio-5.wav" },
-  { title: "Reflection", url: "/wasm-assets/audio-6.wav" },
-  { title: "Breaking the Cycle", url: "/wasm-assets/audio-7.wav" },
-  { title: "Overcome", url: "/wasm-assets/audio-8.wav" },
-  { title: "Rose-Tinted Kaleidomo", url: "/wasm-assets/audio-9.wav" }
+  { title: "Black Hole",            url: "/wasm-assets/audio-4.wav" },
+  { title: "Time Travel",           url: "/wasm-assets/audio-5.wav" },
+  { title: "Reflection",            url: "/wasm-assets/audio-6.wav" },
+  { title: "Breaking the Cycle",    url: "/wasm-assets/audio-7.wav" },
+  { title: "Overcome",              url: "/wasm-assets/audio-8.wav" },
+  { title: "Rose-Tinted Kaleidomo", url: "/wasm-assets/audio-9.wav" },
 ];
 
-// ─── Preset definitions ───────────────────────────────────────────────────────
+// ─── Playback mode ────────────────────────────────────────────────────────────
+
+type PlayMode = "sequential" | "shuffle" | "repeat-one";
+
+// ─── Presets ─────────────────────────────────────────────────────────────────
 
 interface CircleConfig {
   heroCircleLeftX: number;
@@ -108,7 +126,7 @@ interface CircleConfig {
 
 interface Preset {
   name: string;
-  imageIndex: number; // index into SOURCE_IMAGES
+  imageIndex: number;
   circle: CircleConfig;
   // Base reorientation speed (orientation cycles/sec independent of audio)
   orientationBaseSpeed: number;
@@ -116,7 +134,14 @@ interface Preset {
   audioOrientationAmount: number;
   // Beat pumping: how much audio peak triggers reorientation jump
   audioReorientationAmount: number;
-  // Animation loop duration (seconds)
+  /**
+   * Shared oscillator period in seconds.
+   * rotation_cycles sweeps complete in this time, as do num_zoom_loops zoom
+   * cycles and hue_cycles hue cycles.  The WASM derives cycles-per-second as
+   * e.g.  rotation_cycles / animationDuration  — so this controls how fast the
+   * rotation angle moves, NOT when the animation resets (it never resets;
+   * all modulate_by_time functions use rem_euclid so they loop continuously).
+   */
   animationDuration: number;
   // Zoom range
   zoomMax: number;
@@ -142,94 +167,41 @@ const PRESETS: Preset[] = [
   {
     name: "Pink Bloom",
     imageIndex: 0,
-    circle: {
-      heroCircleLeftX: 515.1,
-      heroCircleRightX: 1547.0,
-      heroCircleY: 755.4,
-      heroDesiredLeftRotation: 6.22,
-    },
-    orientationBaseSpeed: 0.04,
-    audioOrientationAmount: 0.18,
-    audioReorientationAmount: 0.06,
+    circle: { heroCircleLeftX: 515.1, heroCircleRightX: 1547.0, heroCircleY: 755.4, heroDesiredLeftRotation: 6.22 },
+    orientationBaseSpeed: 0.04, audioOrientationAmount: 0.18, audioReorientationAmount: 0.06,
     animationDuration: 10,
-    zoomMax: 0.909,
-    zoomMin: 0.85,
-    numZoomLoops: 4,
-    rotationRange: 45,
-    rotationCycles: 1,
-    rotationFn: "sin2",
-    hueRange: 0,
-    hueCycles: 0,
-    hueFn: "-cos",
-    hueRotation: 0,
-    tileCount: 3,
-    offsetX: 354,
-    offsetY: 0,
+    zoomMax: 0.909, zoomMin: 0.85, numZoomLoops: 4,
+    rotationRange: 45, rotationCycles: 1, rotationFn: "sin2",
+    hueRange: 0, hueCycles: 0, hueFn: "-cos",
+    hueRotation: 0, tileCount: 3, offsetX: 354, offsetY: 0,
   },
   {
     name: "Ivory Bloom",
     imageIndex: 1,
-    circle: {
-      heroCircleLeftX: 186.0,
-      heroCircleRightX: 3024.0,
-      heroCircleY: 1850.0,
-      heroDesiredLeftRotation: 6.22,
-    },
-    orientationBaseSpeed: 0.08,
-    audioOrientationAmount: 0.25,
-    audioReorientationAmount: 0.1,
+    circle: { heroCircleLeftX: 186.0, heroCircleRightX: 3024.0, heroCircleY: 1850.0, heroDesiredLeftRotation: 6.22 },
+    orientationBaseSpeed: 0.08, audioOrientationAmount: 0.25, audioReorientationAmount: 0.1,
     animationDuration: 40,
-    zoomMax: 0.95,
-    zoomMin: 0.78,
-    numZoomLoops: 2,
-    rotationRange: 30,
-    rotationCycles: 1,
-    rotationFn: "sin",
-    hueRange: 0,
-    hueCycles: 0,
-    hueFn: "sin",
-    hueRotation: 0,
-    tileCount: 3,
-    offsetX: 200,
-    offsetY: 0,
+    zoomMax: 0.95, zoomMin: 0.78, numZoomLoops: 2,
+    rotationRange: 30, rotationCycles: 1, rotationFn: "sin",
+    hueRange: 0, hueCycles: 0, hueFn: "sin",
+    hueRotation: 0, tileCount: 3, offsetX: 200, offsetY: 0,
   },
   {
     name: "Profound Blue",
     imageIndex: 2,
-    circle: {
-      heroCircleLeftX: 330.0,
-      heroCircleRightX: 2616.0,
-      heroCircleY: 2265.0,
-      heroDesiredLeftRotation: 6.22,
-    },
-    orientationBaseSpeed: 0.015,
-    audioOrientationAmount: 0.1,
-    audioReorientationAmount: 0.03,
+    circle: { heroCircleLeftX: 330.0, heroCircleRightX: 2616.0, heroCircleY: 2265.0, heroDesiredLeftRotation: 6.22 },
+    orientationBaseSpeed: 0.015, audioOrientationAmount: 0.1, audioReorientationAmount: 0.03,
     animationDuration: 40,
-    zoomMax: 0.7,
-    zoomMin: 0.6,
-    numZoomLoops: 6,
-    rotationRange: 20,
-    rotationCycles: 1,
-    rotationFn: "sin2",
-    hueRange: 0,
-    hueCycles: 0,
-    hueFn: "linear",
-    hueRotation: 240,
-    tileCount: 3,
-    offsetX: 500,
-    offsetY: 100,
+    zoomMax: 0.7, zoomMin: 0.6, numZoomLoops: 6,
+    rotationRange: 20, rotationCycles: 1, rotationFn: "sin2",
+    hueRange: 0, hueCycles: 0, hueFn: "linear",
+    hueRotation: 240, tileCount: 3, offsetX: 500, offsetY: 100,
   },
 ];
 
-// ─── Audio helpers (ported from Kaleidomo.tsx) ────────────────────────────────
+// ─── Audio helpers ────────────────────────────────────────────────────────────
 
-function applyLowpassFilter(
-  data: Float32Array,
-  sampleRate: number,
-  cutoffHz: number,
-  poles: number,
-): Float32Array {
+function applyLowpassFilter(data: Float32Array, sampleRate: number, cutoffHz: number, poles: number): Float32Array {
   if (cutoffHz <= 0 || cutoffHz >= sampleRate / 2) return data;
   const rc = 1 / (2 * Math.PI * cutoffHz);
   const dt = 1 / sampleRate;
@@ -245,16 +217,9 @@ function applyLowpassFilter(
   return buf;
 }
 
-function slopeToPoles(slope: number): number {
-  return Math.max(1, Math.round(slope / 6));
-}
+function slopeToPoles(slope: number): number { return Math.max(1, Math.round(slope / 6)); }
 
-function buildFramePeaks(
-  audioBuffer: AudioBuffer,
-  fps: number,
-  lowpassHz = 0,
-  lowpassSlope = 24,
-): Float32Array {
+function buildFramePeaks(audioBuffer: AudioBuffer, fps: number, lowpassHz = 0, lowpassSlope = 24): Float32Array {
   const sampleRate = audioBuffer.sampleRate;
   const samplesPerFrame = Math.max(1, Math.floor(sampleRate / fps));
   const frameCount = Math.ceil(audioBuffer.length / samplesPerFrame);
@@ -277,11 +242,7 @@ function buildFramePeaks(
   return peaks;
 }
 
-function normalizePeaks(
-  rawPeaks: Float32Array,
-  floor: number,
-  ceiling: number,
-): Float32Array {
+function normalizePeaks(rawPeaks: Float32Array, floor: number, ceiling: number): Float32Array {
   const safeCeiling = Math.max(ceiling, floor + 0.0001);
   const out = new Float32Array(rawPeaks.length);
   for (let i = 0; i < rawPeaks.length; i++) {
@@ -291,11 +252,51 @@ function normalizePeaks(
   return out;
 }
 
+/**
+ * FIX 1: Align audio peaks with the WASM engine's elapsed-time frame counter.
+ *
+ * The Rust engine indexes peaks as:
+ *   frame_index = floor(elapsed_seconds * fps) % peaks.len()
+ * where elapsed_seconds = (rAF_timestamp - started_at_ms) / 1000
+ * and started_at_ms is set on the *first rAF tick* after start_animation(),
+ * and is never reset by set_audio_peaks().
+ *
+ * So if we call set_audio_peaks() when the engine is at elapsed frame E,
+ * and the audio is playing from position audioOffsetSecs (frame A = audioOffsetSecs * fps),
+ * the engine will read peaks[E % len] but we want it to read audioPeaks[A].
+ *
+ * Fix: prepend (E - A) silence frames so that peaks[E] == audioPeaks[A].
+ * We use performance.now() - engineStartMs to estimate E, captured immediately
+ * after source.start() so the audio epoch and this estimate are as close as possible.
+ *
+ * On resume: E is the engine's current frame, A is the resume offset in frames.
+ * The prepended silence correctly offsets so the beat hits on the right visual frame.
+ */
+function offsetPeaksForSync(
+  audioPeaks: Float32Array,
+  engineStartMs: number,
+  audioOffsetSecs: number,
+  fps: number,
+): Float32Array {
+  const len = audioPeaks.length;
+  if (len === 0) return audioPeaks;
+  const elapsedSecs  = (performance.now() - engineStartMs) / 1000;
+  const engineFrame  = Math.floor(elapsedSecs * fps);
+  const audioFrame   = Math.floor(audioOffsetSecs * fps);
+  const silenceFrames = Math.max(0, engineFrame - audioFrame);
+  if (silenceFrames === 0) return audioPeaks;
+  // Prepend silenceFrames zeros so that peaks[engineFrame] == audioPeaks[audioFrame]
+  const out = new Float32Array(len + silenceFrames);
+  out.set(audioPeaks, silenceFrames);
+  return out;
+}
+
 // ─── Control state ────────────────────────────────────────────────────────────
 
 interface ControlState {
   hueRotation: number;
-  // Animation
+  // Preset-locked period: time over which rotation_cycles / num_zoom_loops / hue_cycles complete.
+  // Drives cycles-per-second for all oscillators. Not shown in UI — taken from preset.
   animationDuration: number;
   slices: number;
   fps: number;
@@ -336,89 +337,64 @@ interface ControlState {
 
 function presetToControls(p: Preset): ControlState {
   return {
-    animationDuration: 400,
+    animationDuration: p.animationDuration,
+    slices: 24, 
     fps: 30,
-    slices: 24,
-    zoomMax: p.zoomMax,
-    zoomMin: p.zoomMin,
-    zoomFn: "sin",
-    zoomStartOffset: 0,
+    zoomMax: p.zoomMax, 
+    zoomMin: p.zoomMin, 
+    zoomFn: "sin", 
+    zoomStartOffset: 0, 
     numZoomLoops: p.numZoomLoops,
-    rotationRange: p.rotationRange,
-    rotationCycles: 10,
-    rotationStartOffset: 0,
+    rotationRange: p.rotationRange, 
+    rotationCycles: 10, 
+    rotationStartOffset: 0, 
     rotationFn: p.rotationFn,
-    hueRange: p.hueRange,
-    hueCycles: p.hueCycles,
-    hueStartOffset: 0,
+    hueRange: p.hueRange, 
+    hueCycles: p.hueCycles, 
+    hueStartOffset: 0, 
     hueFn: p.hueFn,
     hueRotation: p.hueRotation,
-    orientationBaseSpeed: p.orientationBaseSpeed,
-    orientationPeakMultiplier: 0.25,
+    orientationBaseSpeed: p.orientationBaseSpeed, 
+    orientationPeakMultiplier: 0.25, 
     orientationPhase: 0.0,
     audioReactiveEnabled: true,
-    audioOrientationAmount: p.audioOrientationAmount,
+    audioOrientationAmount: p.audioOrientationAmount, 
     audioReorientationAmount: p.audioReorientationAmount,
-    audioPeakSmoothing: 0.75,
-    audioPeakFloor: 0.02,
+    audioPeakSmoothing: 0.75, 
+    audioPeakFloor: 0.02, 
     audioPeakCeiling: 0.7,
-    audioLowpassFreq: 169,
+    audioLowpassFreq: 169, 
     audioLowpassSlope: 24,
-    tileCount: p.tileCount,
-    offsetX: p.offsetX,
+    tileCount: p.tileCount, 
+    offsetX: p.offsetX, 
     offsetY: p.offsetY,
   };
 }
 
-type ControlAction = { type: "SET"; key: keyof ControlState; value: ControlState[keyof ControlState] }
+type ControlAction =
+  | { type: "SET"; key: keyof ControlState; value: ControlState[keyof ControlState] }
   | { type: "RESET"; preset: Preset };
 
 function controlReducer(state: ControlState, action: ControlAction): ControlState {
   switch (action.type) {
-    case "SET":
-      return { ...state, [action.key]: action.value };
-    case "RESET":
-      return presetToControls(action.preset);
+    case "SET":   return { ...state, [action.key]: action.value };
+    case "RESET": return presetToControls(action.preset);
   }
 }
 
-// ─── Slider helper ────────────────────────────────────────────────────────────
+// ─── UI helpers ───────────────────────────────────────────────────────────────
 
-function LabeledSlider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  unit,
-  onChange,
-  decimals = 2,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  onChange: (v: number) => void;
-  decimals?: number;
+function LabeledSlider({ label, value, min, max, step, unit, onChange, decimals = 2 }: {
+  label: string; value: number; min: number; max: number; step: number;
+  unit?: string; onChange: (v: number) => void; decimals?: number;
 }) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>{label}</span>
-        <span>
-          {Number.isInteger(value) ? value : value.toFixed(decimals)}
-          {unit}
-        </span>
+        <span>{Number.isInteger(value) ? value : value.toFixed(decimals)}{unit}</span>
       </div>
-      <Slider
-        min={min}
-        max={max}
-        step={step}
-        value={[value]}
-        onValueChange={([v]) => onChange(v!)}
-      />
+      <Slider min={min} max={max} step={step} value={[value]} onValueChange={([v]) => onChange(v!)} />
     </div>
   );
 }
@@ -433,30 +409,14 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 const FN_OPTIONS = ["linear", "sin", "sin2", "saw", "triangle", "-cos"] as const;
 
-function FnSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function FnSelect({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="flex flex-wrap gap-1">
         {FN_OPTIONS.map((fn) => (
-          <button
-            key={fn}
-            type="button"
-            onClick={() => onChange(fn)}
-            className={`rounded px-2 py-0.5 text-xs border transition-colors ${
-              value === fn
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border bg-background hover:bg-accent"
-            }`}
-          >
+          <button key={fn} type="button" onClick={() => onChange(fn)}
+            className={`rounded px-2 py-0.5 text-xs border transition-colors ${value === fn ? "bg-primary text-primary-foreground border-primary" : "border-border bg-background hover:bg-accent"}`}>
             {fn}
           </button>
         ))}
@@ -471,117 +431,112 @@ export default function KaleidoPageClient() {
   const [presetIdx, setPresetIdx] = useState(0);
   const activePreset = PRESETS[presetIdx]!;
 
-  const [controls, dispatch] = useReducer(
-    controlReducer,
-    activePreset,
-    presetToControls,
-  );
+  const [controls, dispatch] = useReducer(controlReducer, activePreset, presetToControls);
 
-  // Audio state
-  const [songs] = useState<Song[]>(BUNDLED_SONGS);
-  const [songIdx, setSongIdx] = useState(0);
-  const [uploadedSong, setUploadedSong] = useState<Song | null>(null);
-  const activeSong = uploadedSong ?? songs[songIdx] ?? null;
+  // ── Queue / playback mode ─────────────────────────────────────────────────
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLooping, setIsLooping] = useState(false);
-  const [audioError, setAudioError] = useState<string | null>(null);
+  const [uploadedSong,  setUploadedSong]  = useState<Song | null>(null);
+  const [playMode,      setPlayMode]      = useState<PlayMode>("sequential");
+  const [queueOrder,    setQueueOrder]    = useState<number[]>(() => BUNDLED_SONGS.map((_, i) => i));
+  const [queuePos,      setQueuePos]      = useState(0);
+  const [isPlaying,     setIsPlaying]     = useState(false);
+  const [audioError,    setAudioError]    = useState<string | null>(null);
 
-  // Refs for audio
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
-  const audioStartTimeRef = useRef<number>(0); // AudioContext.currentTime when play() was last called
-  const audioOffsetRef = useRef<number>(0); // seconds into buffer we last started from
+  const activeSongIndex = uploadedSong ? -1 : (queueOrder[queuePos] ?? 0);
+  const activeSong: Song = uploadedSong ?? BUNDLED_SONGS[activeSongIndex] ?? { title: "", url: "" };
 
-  // WASM engine
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const engineRef = useRef<LiveKaleidoscopeEngine | null>(null);
-  const vsRef = useRef<WasmVideoSettings | null>(null);
-  const [wasmError, setWasmError] = useState<string | null>(null);
-  const [wasmReady, setWasmReady] = useState(false);
+  // ── Audio refs ────────────────────────────────────────────────────────────
 
-  // Fullscreen
+  const audioCtxRef              = useRef<AudioContext | null>(null);
+  const audioSourceRef           = useRef<AudioBufferSourceNode | null>(null);
+  const audioBufferRef           = useRef<AudioBuffer | null>(null);
+  const playbackStartCtxTimeRef  = useRef<number>(0);   // AudioContext.currentTime at source.start()
+  const playbackOffsetRef        = useRef<number>(0);   // seconds into buffer at which we started
+  const playbackStartedAtMsRef   = useRef<number>(0);   // performance.now() at source.start()
+  const pendingNextSongRef       = useRef<Song | null>(null); // set by advanceQueue; consumed by useEffect
+
+  // ── WASM refs ─────────────────────────────────────────────────────────────
+
+  const canvasRef        = useRef<HTMLCanvasElement | null>(null);
+  const engineRef        = useRef<LiveKaleidoscopeEngine | null>(null);
+  const vsRef            = useRef<WasmVideoSettings | null>(null);
+  const engineStartMsRef = useRef<number>(0); // performance.now() at start_animation()
+  const [wasmError,  setWasmError]  = useState<string | null>(null);
+  const [wasmReady,  setWasmReady]  = useState(false);
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // ── Preset switch ────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function set<K extends keyof ControlState>(key: K, value: ControlState[K]) {
+    dispatch({ type: "SET", key, value });
+  }
+
   function switchPreset(idx: number) {
     setPresetIdx(idx);
     dispatch({ type: "RESET", preset: PRESETS[idx]! });
   }
 
-  // ── set helper ───────────────────────────────────────────────────────────
-  function set<K extends keyof ControlState>(key: K, value: ControlState[K]) {
-    dispatch({ type: "SET", key, value });
-  }
+  const applyVs = useCallback((vs: WasmVideoSettings, c: ControlState, preset: Preset) => {
+    // animation_duration is the shared oscillator period: the time over which
+    // rotation_cycles sweeps and num_zoom_loops zoom cycles complete.
+    // It is NOT a loop timer — all modulate_by_time functions use rem_euclid
+    // so they loop continuously. Value comes from the preset, not the UI.
+    vs.animation_duration = 400;
+    vs.fps = c.fps;
 
-  // ── Apply WasmVideoSettings from current controls + active preset circle ─
-  const applyVs = useCallback(
-    (vs: WasmVideoSettings, c: ControlState, preset: Preset) => {
-      vs.animation_duration = Math.max(0.001, c.animationDuration);
-      vs.fps = c.fps;
+    vs.zoom_max = c.zoomMax; vs.zoom_min = c.zoomMin;
+    vs.set_zoom_fn(c.zoomFn); vs.zoom_start_offset = c.zoomStartOffset; vs.num_zoom_loops = c.numZoomLoops;
 
-      vs.zoom_max = c.zoomMax;
-      vs.zoom_min = c.zoomMin;
-      vs.set_zoom_fn(c.zoomFn);
-      vs.zoom_start_offset = c.zoomStartOffset;
-      vs.num_zoom_loops = c.numZoomLoops;
+    vs.rotation_range = c.rotationRange; vs.rotation_cycles = c.rotationCycles;
+    vs.rotation_start_offset = c.rotationStartOffset; vs.set_rotation_fn(c.rotationFn);
 
-      vs.rotation_range = c.rotationRange;
-      vs.rotation_cycles = c.rotationCycles;
-      vs.rotation_start_offset = c.rotationStartOffset;
-      vs.set_rotation_fn(c.rotationFn);
+    vs.hue_range = c.hueRange; vs.hue_cycles = c.hueCycles;
+    vs.hue_start_offset = c.hueStartOffset; vs.set_hue_fn(c.hueFn);
 
-      vs.hue_range = c.hueRange;
-      vs.hue_cycles = c.hueCycles;
-      vs.hue_start_offset = c.hueStartOffset;
-      vs.set_hue_fn(c.hueFn);
+    vs.orientation_base_speed = c.orientationBaseSpeed;
+    vs.orientation_start_offset = c.orientationPhase;
 
-      vs.orientation_base_speed = c.orientationBaseSpeed;
-      vs.orientation_start_offset = c.orientationPhase;
+    vs.audio_reactive_enabled      = c.audioReactiveEnabled;
+    vs.audio_orientation_amount    = c.audioOrientationAmount;
+    vs.audio_reorientation_amount  = c.audioReorientationAmount;
+    vs.audio_peak_smoothing        = c.audioPeakSmoothing;
+    vs.orientation_peak_multiplier = c.orientationPeakMultiplier;
 
-      vs.audio_reactive_enabled = c.audioReactiveEnabled;
-      vs.audio_orientation_amount = c.audioOrientationAmount;
-      vs.audio_reorientation_amount = c.audioReorientationAmount;
-      vs.audio_peak_smoothing = c.audioPeakSmoothing;
-      vs.orientation_peak_multiplier = c.orientationPeakMultiplier;
+    vs.hero_circle_left_x         = preset.circle.heroCircleLeftX;
+    vs.hero_circle_right_x        = preset.circle.heroCircleRightX;
+    vs.hero_circle_y              = preset.circle.heroCircleY;
+    vs.hero_desired_left_rotation = preset.circle.heroDesiredLeftRotation;
+  }, []);
 
-      // Hardcoded circle per preset
-      vs.hero_circle_left_x = preset.circle.heroCircleLeftX;
-      vs.hero_circle_right_x = preset.circle.heroCircleRightX;
-      vs.hero_circle_y = preset.circle.heroCircleY;
-      vs.hero_desired_left_rotation = preset.circle.heroDesiredLeftRotation;
-    },
-    [],
-  );
-
-  // ── Compute orientation params from circle at phase 0 ────────────────────
   function circleAtPhase(preset: Preset, phase: number) {
-    const { heroCircleLeftX: lx, heroCircleRightX: rx, heroCircleY: cy, heroDesiredLeftRotation: dlr } =
-      preset.circle;
-    const cx = (lx + rx) / 2;
-    const radius = (rx - lx) / 2;
-    const angle = Math.PI + phase * Math.PI * 2;
+    const { heroCircleLeftX: lx, heroCircleRightX: rx, heroCircleY: cy, heroDesiredLeftRotation: dlr } = preset.circle;
+    const cx = (lx + rx) / 2, r = (rx - lx) / 2, angle = Math.PI + phase * Math.PI * 2;
     return {
-      triangleCenterX: cx + Math.cos(angle) * radius,
-      triangleCenterY: cy + Math.sin(angle) * radius,
+      triangleCenterX:    cx + Math.cos(angle) * r,
+      triangleCenterY:    cy + Math.sin(angle) * r,
       triangleRotationRad: dlr + (angle - Math.PI),
     };
   }
 
-  // ── WASM init ────────────────────────────────────────────────────────────
+  // ── WASM lifecycle ────────────────────────────────────────────────────────
+  // Engine is created once on mount and destroyed on unmount.
+  // Preset changes are handled separately below via load_image_from_url +
+  // update_animation_settings so started_at_ms never resets and the visuals
+  // remain continuous across preset and song switches.
+
   useEffect(() => {
     let cancelled = false;
 
     function teardown() {
-      const eng = engineRef.current;
-      const vs = vsRef.current;
-      engineRef.current = null;
-      vsRef.current = null;
+      const eng = engineRef.current, vs = vsRef.current;
+      engineRef.current = null; vsRef.current = null;
       try { eng?.stop_animation(); } catch { /* */ }
-      try { eng?.free(); } catch { /* */ }
-      try { vs?.free(); } catch { /* */ }
+      try { eng?.free();           } catch { /* */ }
+      try { vs?.free();            } catch { /* */ }
     }
 
     serialise(async () => {
@@ -591,63 +546,34 @@ export default function KaleidoPageClient() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let mod: any;
-      try {
-        mod = await getWasmMod();
-      } catch (e) {
-        if (!cancelled) setWasmError(String(e));
-        return;
-      }
+      try { mod = await getWasmMod(); }
+      catch (e) { if (!cancelled) setWasmError(String(e)); return; }
       if (cancelled) return;
 
       try {
-        const engine = await new (
-          mod.LiveKaleidoscopeEngine as typeof LiveKaleidoscopeEngine
-        )(canvas);
-        engineRef.current = engine;
-      } catch (e) {
-        if (!cancelled) setWasmError(String(e));
-        return;
-      }
+        engineRef.current = await new (mod.LiveKaleidoscopeEngine as typeof LiveKaleidoscopeEngine)(canvas);
+      } catch (e) { if (!cancelled) setWasmError(String(e)); return; }
       if (cancelled) { teardown(); return; }
 
       const preset = PRESETS[presetIdx]!;
-      try {
-        await engineRef.current!.load_image_from_url(
-          SOURCE_IMAGES[preset.imageIndex]!,
-        );
-      } catch (e) {
-        teardown();
-        if (!cancelled) setWasmError(String(e));
-        return;
-      }
+      try { await engineRef.current!.load_image_from_url(SOURCE_IMAGES[preset.imageIndex]!); }
+      catch (e) { teardown(); if (!cancelled) setWasmError(String(e)); return; }
       if (cancelled) { teardown(); return; }
 
       const vs = new (mod.WasmVideoSettings as typeof WasmVideoSettings)();
       vsRef.current = vs;
       applyVs(vs, controls, preset);
 
-      const { triangleCenterX, triangleCenterY, triangleRotationRad } =
-        circleAtPhase(preset, 0);
-
+      const { triangleCenterX, triangleCenterY, triangleRotationRad } = circleAtPhase(preset, 0);
       try {
+        engineStartMsRef.current = performance.now();
         engineRef.current!.start_animation(
-          controls.slices,
-          controls.offsetX,
-          controls.offsetY,
-          0.069,
-          controls.tileCount,
-          triangleCenterX,
-          triangleCenterY,
-          triangleRotationRad,
-          KALEIDO_TYPE_IDX, // kaleido_type_idx
-          controls.hueRotation, // hue_rotation
-          vs,
+          controls.slices, controls.offsetX, controls.offsetY, 0.069, controls.tileCount,
+          triangleCenterX, triangleCenterY, triangleRotationRad,
+          KALEIDO_TYPE_IDX, controls.hueRotation, vs,
         );
-      } catch (e) {
-        teardown();
-        if (!cancelled) setWasmError(String(e));
-        return;
-      }
+      } catch (e) { teardown(); if (!cancelled) setWasmError(String(e)); return; }
+
       if (!cancelled) setWasmReady(true);
     });
 
@@ -656,368 +582,370 @@ export default function KaleidoPageClient() {
       setWasmReady(false);
       serialise(async () => teardown());
     };
-    // Intentionally run only on mount / preset image change — control updates
-    // go through the update effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetIdx]);
+  }, []); // mount/unmount only — preset changes go through the effect below
 
-  // ── Update engine when controls change ───────────────────────────────────
+  // ── Preset switch: hot-swap image + settings without restarting engine ────
+  // Runs when presetIdx changes (skips the initial mount because the lifecycle
+  // effect above handles the first load). wasmReady gates it so we don't race
+  // against the initial start_animation call.
+
+  const prevPresetIdxRef = useRef(presetIdx);
+
   useEffect(() => {
+    if (!wasmReady) return;
+    if (prevPresetIdxRef.current === presetIdx) return; // skip initial run
+    prevPresetIdxRef.current = presetIdx;
+
     const engine = engineRef.current;
     const vs = vsRef.current;
+    if (!engine || !vs) return;
+
+    const preset = PRESETS[presetIdx]!;
+
+    // Load the new image into the running engine — does NOT reset started_at_ms
+    engine.load_image_from_url(SOURCE_IMAGES[preset.imageIndex]!).then(() => {
+      if (engineRef.current !== engine) return; // engine was torn down during fetch
+      applyVs(vs, controls, preset);
+      const { triangleCenterX, triangleCenterY, triangleRotationRad } = circleAtPhase(preset, 0);
+      try {
+        engine.update_animation_settings(
+          controls.slices, controls.offsetX, controls.offsetY, 0.069, controls.tileCount,
+          triangleCenterX, triangleCenterY, triangleRotationRad,
+          KALEIDO_TYPE_IDX, controls.hueRotation, vs,
+        );
+      } catch { /* engine stopped */ }
+    }).catch((e) => { setWasmError(String(e)); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetIdx, wasmReady]);
+
+  useEffect(() => {
+    const engine = engineRef.current, vs = vsRef.current;
     if (!engine || !vs || !wasmReady) return;
-
     applyVs(vs, controls, activePreset);
-    const { triangleCenterX, triangleCenterY, triangleRotationRad } =
-      circleAtPhase(activePreset, controls.orientationPhase);
-
+    const { triangleCenterX, triangleCenterY, triangleRotationRad } = circleAtPhase(activePreset, controls.orientationPhase);
     try {
       engine.update_animation_settings(
-        controls.slices,
-        controls.offsetX,
-        controls.offsetY,
-        0.069,
-        controls.tileCount,
-        triangleCenterX,
-        triangleCenterY,
-        triangleRotationRad,
-        KALEIDO_TYPE_IDX,
-        controls.hueRotation,
-        vs,
+        controls.slices, controls.offsetX, controls.offsetY, 0.069, controls.tileCount,
+        triangleCenterX, triangleCenterY, triangleRotationRad,
+        KALEIDO_TYPE_IDX, controls.hueRotation, vs,
       );
-    } catch {
-      /* engine may not be started yet */
-    }
+    } catch { /* not started yet */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controls, wasmReady]);
 
-  // ── Canvas resize (fullscreen) ───────────────────────────────────────────
+  // ── Canvas resize ─────────────────────────────────────────────────────────
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     function resize() {
       if (!canvas) return;
-      if (isFullscreen) {
-        canvas.width = window.screen.width;
-        canvas.height = window.screen.height;
-      } else {
-        canvas.width = 1920;
-        canvas.height = 1080;
-      }
+      canvas.width  = isFullscreen ? window.screen.width  : 1920;
+      canvas.height = isFullscreen ? window.screen.height : 1080;
     }
     resize();
-
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, [isFullscreen]);
 
-  // ── Fullscreen toggle ─────────────────────────────────────────────────────
-  function enterFullscreen() {
-    const el = containerRef.current;
-    if (!el) return;
-    el.requestFullscreen?.().catch(() => {});
-    setIsFullscreen(true);
-  }
+  // ── Fullscreen ────────────────────────────────────────────────────────────
 
-  function exitFullscreen() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
-    setIsFullscreen(false);
-  }
+  function enterFullscreen() { containerRef.current?.requestFullscreen?.().catch(() => {}); setIsFullscreen(true); }
+  function exitFullscreen()  { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); setIsFullscreen(false); }
 
-  // Exit fullscreen on any click or keypress inside fullscreen
   useEffect(() => {
-    function onKey() { if (isFullscreen) exitFullscreen(); }
+    function onKey()   { if (isFullscreen) exitFullscreen(); }
     function onClick() { if (isFullscreen) exitFullscreen(); }
     window.addEventListener("keydown", onKey);
-    window.addEventListener("click", onClick);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("click", onClick);
-    };
-  }, [isFullscreen]);
+    window.addEventListener("click",   onClick);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("click", onClick); };
+  }, [isFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync isFullscreen with native fullscreen changes (e.g. Escape key)
   useEffect(() => {
-    function onFsChange() {
-      if (!document.fullscreenElement) setIsFullscreen(false);
-    }
+    function onFsChange() { if (!document.fullscreenElement) setIsFullscreen(false); }
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // ── Audio helpers ─────────────────────────────────────────────────────────
+  // ── Audio ─────────────────────────────────────────────────────────────────
 
   async function ensureAudioCtx() {
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
       audioCtxRef.current = new AudioContext();
     }
-    if (audioCtxRef.current.state === "suspended") {
-      await audioCtxRef.current.resume();
-    }
+    if (audioCtxRef.current.state === "suspended") await audioCtxRef.current.resume();
     return audioCtxRef.current;
   }
 
   function stopAudioSource() {
-    try { audioSourceRef.current?.stop(); } catch { /* */ }
-    audioSourceRef.current?.disconnect();
-    audioSourceRef.current = null;
+    const node = audioSourceRef.current;
+    audioSourceRef.current = null; // null first so onended knows this was an explicit stop
+    try { node?.stop(); } catch { /* */ }
+    node?.disconnect();
   }
 
   async function loadAudioBuffer(url: string): Promise<AudioBuffer> {
     const ctx = await ensureAudioCtx();
     const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} loading ${url}`);
-    const arrayBuf = await resp.arrayBuffer();
-    return ctx.decodeAudioData(arrayBuf);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} loading audio`);
+    return ctx.decodeAudioData(await resp.arrayBuffer());
   }
 
-  async function sendPeaksToEngine(buffer: AudioBuffer) {
+  /**
+   * Build peaks, rotate for sync, and send to WASM.
+   * audioOffsetSecs  = how many seconds into the audio buffer we are starting from.
+   * startedAtMs      = performance.now() captured immediately after source.start() so
+   *                    that rotation accounts for any time spent fetching/decoding/filtering
+   *                    rather than snapshotting performance.now() inside rotatePeaksForSync
+   *                    (which would be too early — the audio hadn't started yet).
+   */
+  async function buildAndSendPeaks(buffer: AudioBuffer, audioOffsetSecs: number, startedAtMs?: number) {
     const engine = engineRef.current;
     if (!engine) return;
-    const rawPeaks = buildFramePeaks(
-      buffer,
-      controls.fps,
-      controls.audioLowpassFreq,
-      controls.audioLowpassSlope,
-    );
-    const peaks = normalizePeaks(
-      rawPeaks,
-      controls.audioPeakFloor,
-      controls.audioPeakCeiling,
-    );
-    engine.set_audio_peaks(peaks);
+    const raw    = buildFramePeaks(buffer, controls.fps, controls.audioLowpassFreq, controls.audioLowpassSlope);
+    const normed = normalizePeaks(raw, controls.audioPeakFloor, controls.audioPeakCeiling);
+    // FIX 1: prepend silence so that peaks[engineElapsedFrame] == audioPeaks[audioOffsetFrame].
+    // Use startedAtMs if provided (playback already started), otherwise fall back to
+    // engineStartMsRef so mid-playback settings changes still resync correctly.
+    const synced = offsetPeaksForSync(normed, startedAtMs ?? engineStartMsRef.current, audioOffsetSecs, controls.fps);
+    engine.set_audio_peaks(synced);
   }
 
-  async function startPlayback(offsetSecs = 0) {
-    if (!activeSong) return;
+  async function startPlayback(song: Song, offsetSecs = 0) {
     const ctx = await ensureAudioCtx();
     stopAudioSource();
 
-    let buffer = audioBufferRef.current;
-    if (!buffer) {
-      try {
-        buffer = await loadAudioBuffer(activeSong.url);
-        audioBufferRef.current = buffer;
-        await sendPeaksToEngine(buffer);
-      } catch (e) {
-        setAudioError(`Could not load audio: ${String(e)}`);
-        return;
-      }
+    // Load buffer if needed (clears when song changes or on restart)
+    if (!audioBufferRef.current) {
+      try   { audioBufferRef.current = await loadAudioBuffer(song.url); }
+      catch (e) { setAudioError(`Could not load audio: ${String(e)}`); return; }
     }
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.loop = isLooping;
+    const buffer = audioBufferRef.current!;
+
+    // Set offset before the async peaks build so pausePlayback can't race and
+    // accumulate against a stale value if the user pauses during decoding.
+    playbackOffsetRef.current = offsetSecs;
+
+    // Build peaks from the decoded buffer (CPU-only, no async after this point).
+    const raw    = buildFramePeaks(buffer, controls.fps, controls.audioLowpassFreq, controls.audioLowpassSlope);
+    const normed = normalizePeaks(raw, controls.audioPeakFloor, controls.audioPeakCeiling);
+
+    const source   = ctx.createBufferSource();
+    source.buffer  = buffer;
+    source.loop    = playMode === "repeat-one";
     source.connect(ctx.destination);
     source.start(0, offsetSecs);
-    audioSourceRef.current = source;
-    audioStartTimeRef.current = ctx.currentTime;
-    audioOffsetRef.current = offsetSecs;
+    // Capture timestamp immediately after start() — this is the true audio epoch.
+    // Rotating peaks against this (rather than inside buildAndSendPeaks before start)
+    // means fetch + decode + filter time no longer shifts visuals ahead of the audio.
+    const startedAtMs = performance.now();
+    playbackStartedAtMsRef.current = startedAtMs;
+
+    // Offset peaks now that we know exactly when audio began and send to WASM.
+    const synced = offsetPeaksForSync(normed, startedAtMs, offsetSecs, controls.fps);
+    engineRef.current?.set_audio_peaks(synced);
+
+    audioSourceRef.current           = source;
+    playbackStartCtxTimeRef.current  = ctx.currentTime;
 
     source.onended = () => {
-      if (!isLooping) setIsPlaying(false);
+      if (audioSourceRef.current !== source) return; // explicit stop() nulled the ref — not a natural end
+      if (playMode === "repeat-one") return; // loop flag handles it natively
+      advanceQueue();
     };
+
     setIsPlaying(true);
     setAudioError(null);
   }
 
+  // Called when a track finishes — move to the next one in the queue.
+  // startPlayback is NOT called here directly because this runs inside an onended
+  // handler which may be called from within a React state updater context.
+  // Instead we write to pendingNextSongRef and let the useEffect below trigger playback.
+  function advanceQueue() {
+    setQueuePos((prev) => {
+      const nextPos = prev + 1;
+      if (nextPos >= queueOrder.length) {
+        setIsPlaying(false);
+        return 0; // wrap to start but don't auto-play
+      }
+      const nextSong = BUNDLED_SONGS[queueOrder[nextPos]!]!;
+      audioBufferRef.current = null; // force reload for next track
+      pendingNextSongRef.current = nextSong;
+      return nextPos;
+    });
+  }
+
+  // Consume pendingNextSongRef after queue advances — triggers startPlayback
+  // outside of any state updater or onended callback.
+  useEffect(() => {
+    const next = pendingNextSongRef.current;
+    if (!next) return;
+    pendingNextSongRef.current = null;
+    void startPlayback(next, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuePos]);
+
   function pausePlayback() {
     const ctx = audioCtxRef.current;
     if (ctx && audioSourceRef.current) {
-      // Record how far we are in the buffer before stopping
-      audioOffsetRef.current += ctx.currentTime - audioStartTimeRef.current;
+      // Accumulate the played duration so resume picks up from here
+      playbackOffsetRef.current += ctx.currentTime - playbackStartCtxTimeRef.current;
     }
     stopAudioSource();
     setIsPlaying(false);
   }
 
   async function restartPlayback() {
-    // Reset WASM animation frame counter
-    const engine = engineRef.current;
-    if (engine) engine.clear_audio_peaks();
-    if (audioBufferRef.current && engineRef.current) {
-      await sendPeaksToEngine(audioBufferRef.current);
-    }
-    audioOffsetRef.current = 0;
+    playbackOffsetRef.current  = 0;
+    audioBufferRef.current     = null; // force peak rebuild with offset=0
     stopAudioSource();
     setIsPlaying(false);
-    await startPlayback(0);
+    if (activeSong.url) await startPlayback(activeSong, 0);
   }
 
   async function handlePlay() {
     if (isPlaying) return;
-    await startPlayback(audioOffsetRef.current);
+    await startPlayback(activeSong, playbackOffsetRef.current);
   }
 
-  // Re-send peaks whenever relevant audio controls change
+  // Resend synced peaks when analysis settings change mid-playback
   useEffect(() => {
-    if (!audioBufferRef.current) return;
-    sendPeaksToEngine(audioBufferRef.current).catch(() => {});
+    if (!audioBufferRef.current || !isPlaying) return;
+    const ctx = audioCtxRef.current;
+    const currentOffset = ctx
+      ? playbackOffsetRef.current + (ctx.currentTime - playbackStartCtxTimeRef.current)
+      : playbackOffsetRef.current;
+    buildAndSendPeaks(audioBufferRef.current, currentOffset, playbackStartedAtMsRef.current).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controls.fps, controls.audioLowpassFreq, controls.audioLowpassSlope, controls.audioPeakFloor, controls.audioPeakCeiling]);
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // ── Play-mode ─────────────────────────────────────────────────────────────
+
+  function cyclePlayMode() {
+    const modes: PlayMode[] = ["sequential", "shuffle", "repeat-one"];
+    const next = modes[(modes.indexOf(playMode) + 1) % modes.length]!;
+    setPlayMode(next);
+    if (next === "shuffle") {
+      // Fisher-Yates shuffle
+      const arr = BUNDLED_SONGS.map((_, i) => i);
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+      }
+      setQueueOrder(arr);
+      setQueuePos(0);
+    } else {
+      setQueueOrder(BUNDLED_SONGS.map((_, i) => i));
+      setQueuePos(0);
+    }
+    // Update loop flag on the currently playing source
+    if (audioSourceRef.current) {
+      audioSourceRef.current.loop = next === "repeat-one";
+    }
+  }
+
+  // ── Song selection ────────────────────────────────────────────────────────
+
+  function selectSongByIndex(idx: number) {
+    const pos = queueOrder.indexOf(idx);
+    setQueuePos(pos >= 0 ? pos : 0);
+    audioBufferRef.current = null;
+    stopAudioSource();
+    setIsPlaying(false);
+    playbackOffsetRef.current = 0;
+  }
+
+  // ── File upload ───────────────────────────────────────────────────────────
+
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
     setUploadedSong({ title: file.name, url });
-    audioBufferRef.current = null; // force reload
+    audioBufferRef.current = null;
     stopAudioSource();
     setIsPlaying(false);
+    playbackOffsetRef.current = 0;
   }
 
-  // ── Memoised control panel ────────────────────────────────────────────────
-  const controlPanel = useMemo(
-    () => (
-      <div className="flex flex-col gap-2 px-3 py-3 text-sm">
-        {/* ── Presets ── */}
-        <SectionHeader>Preset</SectionHeader>
-        <div className="flex flex-col gap-1">
-          {PRESETS.map((p, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => switchPreset(i)}
-              className={`rounded px-2 py-1.5 text-left text-xs border transition-colors ${
-                i === presetIdx
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border bg-background hover:bg-accent"
-              }`}
-            >
-              {p.name}
+  // ── Control panel ─────────────────────────────────────────────────────────
+
+  const controlPanel = useMemo(() => (
+    <div className="flex flex-col gap-2 px-3 py-3 text-sm">
+      <SectionHeader>Preset</SectionHeader>
+      <div className="flex flex-col gap-1">
+        {PRESETS.map((p, i) => (
+          <button key={i} type="button" onClick={() => switchPreset(i)}
+            className={`rounded px-2 py-1.5 text-left text-xs border transition-colors ${i === presetIdx ? "bg-primary text-primary-foreground border-primary" : "border-border bg-background hover:bg-accent"}`}>
+            {p.name}
+          </button>
+        ))}
+      </div>
+
+      <SectionHeader>Animation</SectionHeader>
+      <LabeledSlider label="Slices" value={controls.slices} min={3} max={128} step={1} unit=" slices" onChange={(v) => set("slices", v)} />
+      <LabeledSlider label="FPS" value={controls.fps} min={10} max={60} step={1} decimals={0} onChange={(v) => set("fps", v)} />
+      <LabeledSlider label="Color Shift" value={controls.hueRotation} min={0} max={360} step={1} decimals={0} onChange={(v) => set("hueRotation", v)} />
+
+      <SectionHeader>Rotation around moving point</SectionHeader>
+      <LabeledSlider label="Range (°)" value={controls.rotationRange} min={0} max={360} step={1} decimals={0} onChange={(v) => set("rotationRange", v)} />
+      <LabeledSlider label="Cycles" value={controls.rotationCycles} min={0} max={8} step={0.25} onChange={(v) => set("rotationCycles", v)} />
+      <LabeledSlider label="Start Offset" value={controls.rotationStartOffset} min={0} max={1} step={0.01} onChange={(v) => set("rotationStartOffset", v)} />
+      <FnSelect label="Rotation Fn" value={controls.rotationFn} onChange={(v) => set("rotationFn", v)} />
+
+      <SectionHeader>Hue / Daydream Effect</SectionHeader>
+      <LabeledSlider label="Range (°)" value={controls.hueRange} min={0} max={360} step={1} decimals={0} onChange={(v) => set("hueRange", v)} />
+      <LabeledSlider label="Cycles" value={controls.hueCycles} min={0} max={32} step={1} onChange={(v) => set("hueCycles", v)} />
+      <LabeledSlider label="Start Offset" value={controls.hueStartOffset} min={0} max={1} step={0.01} onChange={(v) => set("hueStartOffset", v)} />
+      <FnSelect label="Hue Fn" value={controls.hueFn} onChange={(v) => set("hueFn", v)} />
+
+      <SectionHeader>Orientation</SectionHeader>
+      <LabeledSlider label="Base Speed" value={controls.orientationBaseSpeed} min={0} max={25} step={0.001} onChange={(v) => set("orientationBaseSpeed", v)} />
+      <LabeledSlider label="Peak Multiplier" value={controls.orientationPeakMultiplier} min={0} max={5} step={0.05} onChange={(v) => set("orientationPeakMultiplier", v)} />
+      <LabeledSlider label="Phase" value={controls.orientationPhase} min={0} max={1} step={0.001} onChange={(v) => set("orientationPhase", v)} />
+
+      <SectionHeader>Source Crop</SectionHeader>
+      <LabeledSlider label="Offset X" value={controls.offsetX} min={0} max={2000} step={1} decimals={0} onChange={(v) => set("offsetX", v)} />
+      <LabeledSlider label="Offset Y" value={controls.offsetY} min={0} max={2000} step={1} decimals={0} onChange={(v) => set("offsetY", v)} />
+      <LabeledSlider label="Tile Count" value={controls.tileCount} min={1} max={12} step={0.1} decimals={0} onChange={(v) => set("tileCount", v)} />
+
+      <SectionHeader>Audio Reactive</SectionHeader>
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <Checkbox checked={controls.audioReactiveEnabled} onCheckedChange={(c) => set("audioReactiveEnabled", !!c)} />
+        Enable audio reactivity
+      </label>
+      <LabeledSlider label="Orientation Amt" value={controls.audioOrientationAmount} min={0} max={1} step={0.01} onChange={(v) => set("audioOrientationAmount", v)} />
+      <LabeledSlider label="Reorientation Amt" value={controls.audioReorientationAmount} min={0} max={1} step={0.01} onChange={(v) => set("audioReorientationAmount", v)} />
+      <LabeledSlider label="Peak Smoothing" value={controls.audioPeakSmoothing} min={0} max={0.999} step={0.01} onChange={(v) => set("audioPeakSmoothing", v)} />
+      <LabeledSlider label="Noise Gate" value={controls.audioPeakFloor} min={0} max={0.5} step={0.001} onChange={(v) => set("audioPeakFloor", v)} />
+      <LabeledSlider label="Peak Clip" value={controls.audioPeakCeiling} min={0.05} max={1} step={0.001} onChange={(v) => set("audioPeakCeiling", v)} />
+      <LabeledSlider label="LP Cutoff" value={controls.audioLowpassFreq} min={40} max={800} step={1} decimals={0} unit=" Hz" onChange={(v) => set("audioLowpassFreq", v)} />
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">LP Slope</p>
+        <div className="flex gap-1">
+          {([6, 12, 24, 48] as const).map((s) => (
+            <button key={s} type="button" onClick={() => set("audioLowpassSlope", s)}
+              className={`rounded px-2 py-0.5 text-xs border transition-colors ${controls.audioLowpassSlope === s ? "bg-primary text-primary-foreground border-primary" : "border-border bg-background hover:bg-accent"}`}>
+              {s}
             </button>
           ))}
         </div>
-
-        {/* ── Animation ── */}
-        <SectionHeader>Animation</SectionHeader>
-        <LabeledSlider
-          label="Slices"
-          value={controls.slices}
-          min={3}
-          max={128}
-          step={1}
-          unit="slices"
-          onChange={(v) => set("slices", v)}
-        />
-        <LabeledSlider
-          label="FPS"
-          value={controls.fps}
-          min={10}
-          max={60}
-          step={1}
-          decimals={0}
-          onChange={(v) => set("fps", v)}
-        />
-        <LabeledSlider
-          label="Color Shift"
-          value={controls.hueRotation}
-          min={0}
-          max={360}
-          step={1}
-          decimals={0}
-          onChange={(v) => set("hueRotation", v)}
-        />
-
-        {/* ── Rotation ── */}
-        <SectionHeader>Rotation around moving point</SectionHeader>
-        <LabeledSlider label="Range (°)" value={controls.rotationRange} min={0} max={360} step={1} decimals={0} onChange={(v) => set("rotationRange", v)} />
-        <LabeledSlider label="Cycles" value={controls.rotationCycles} min={0} max={8} step={0.25} onChange={(v) => set("rotationCycles", v)} />
-        <LabeledSlider label="Start Offset" value={controls.rotationStartOffset} min={0} max={1} step={0.01} onChange={(v) => set("rotationStartOffset", v)} />
-        <FnSelect label="Rotation Fn" value={controls.rotationFn} onChange={(v) => set("rotationFn", v)} />
-
-        {/* ── Hue ── */}
-        <SectionHeader>Hue / Daydream Effect</SectionHeader>
-        <LabeledSlider label="Range (°)" value={controls.hueRange} min={0} max={360} step={1} decimals={0} onChange={(v) => set("hueRange", v)} />
-        <LabeledSlider label="Cycles" value={controls.hueCycles} min={0} max={32} step={1} onChange={(v) => set("hueCycles", v)} />
-        <LabeledSlider label="Start Offset" value={controls.hueStartOffset} min={0} max={1} step={0.01} onChange={(v) => set("hueStartOffset", v)} />
-        <FnSelect label="Hue Fn" value={controls.hueFn} onChange={(v) => set("hueFn", v)} />
-
-        {/* ── Orientation (circle motion speed) ── */}
-        <SectionHeader>Orientation</SectionHeader>
-        <LabeledSlider
-          label="Base Speed"
-          value={controls.orientationBaseSpeed}
-          min={0}
-          max={25}
-          step={0.001}
-          onChange={(v) => set("orientationBaseSpeed", v)}
-        />
-        <LabeledSlider
-          label="Peak Multiplier"
-          value={controls.orientationPeakMultiplier}
-          min={0}
-          max={5}
-          step={0.05}
-          onChange={(v) => set("orientationPeakMultiplier", v)}
-        />
-        <LabeledSlider
-          label="Phase"
-          value={controls.orientationPhase}
-          min={0}
-          max={1}
-          step={0.001}
-          onChange={(v) => set("orientationPhase", v)}
-        />
-
-        {/* ── Source ── */}
-        <SectionHeader>Source Crop</SectionHeader>
-        <LabeledSlider label="Offset X" value={controls.offsetX} min={0} max={2000} step={1} decimals={0} onChange={(v) => set("offsetX", v)} />
-        <LabeledSlider label="Offset Y" value={controls.offsetY} min={0} max={2000} step={1} decimals={0} onChange={(v) => set("offsetY", v)} />
-        <LabeledSlider
-          label="Tile Count"
-          value={controls.tileCount}
-          min={1}
-          max={12}
-          step={0.1}
-          decimals={0}
-          onChange={(v) => set("tileCount", v)}
-        />
-
-        {/* ── Audio reactive ── */}
-        <SectionHeader>Audio Reactive</SectionHeader>
-        <label className="flex items-center gap-2 text-xs cursor-pointer">
-          <Checkbox
-            checked={controls.audioReactiveEnabled}
-            onCheckedChange={(c) => set("audioReactiveEnabled", !!c)}
-          />
-          Enable audio reactivity
-        </label>
-        <LabeledSlider label="Orientation Amt" value={controls.audioOrientationAmount} min={0} max={1} step={0.01} onChange={(v) => set("audioOrientationAmount", v)} />
-        <LabeledSlider label="Reorientation Amt" value={controls.audioReorientationAmount} min={0} max={1} step={0.01} onChange={(v) => set("audioReorientationAmount", v)} />
-        <LabeledSlider label="Peak Smoothing" value={controls.audioPeakSmoothing} min={0} max={0.999} step={0.01} onChange={(v) => set("audioPeakSmoothing", v)} />
-        <LabeledSlider label="Noise Gate" value={controls.audioPeakFloor} min={0} max={0.5} step={0.001} onChange={(v) => set("audioPeakFloor", v)} />
-        <LabeledSlider label="Peak Clip" value={controls.audioPeakCeiling} min={0.05} max={1} step={0.001} onChange={(v) => set("audioPeakCeiling", v)} />
-        <LabeledSlider label="LP Cutoff" value={controls.audioLowpassFreq} min={40} max={800} step={1} decimals={0} unit=" Hz" onChange={(v) => set("audioLowpassFreq", v)} />
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">LP Slope</p>
-          <div className="flex gap-1">
-            {([6, 12, 24, 48] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => set("audioLowpassSlope", s)}
-                className={`rounded px-2 py-0.5 text-xs border transition-colors ${
-                  controls.audioLowpassSlope === s
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border bg-background hover:bg-accent"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [controls, presetIdx],
-  );
+    </div>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [controls, presetIdx]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  const playModeLabel: Record<PlayMode, string> = {
+    sequential:  "▶▶ Sequential",
+    shuffle:     "🔀 Shuffle",
+    "repeat-one":"🔂 Repeat One",
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-black text-white">
       {/* Left controls panel (hidden while fullscreen) */}
@@ -1028,10 +956,7 @@ export default function KaleidoPageClient() {
       )}
 
       {/* Main canvas + overlay */}
-      <div
-        ref={containerRef}
-        className="relative flex flex-1 flex-col items-center justify-center bg-black"
-      >
+      <div ref={containerRef} className="relative flex flex-1 flex-col items-center justify-center bg-black">
         {/* Canvas */}
         <canvas
           ref={canvasRef}
@@ -1041,110 +966,72 @@ export default function KaleidoPageClient() {
           style={{ display: "block" }}
         />
 
-        {/* WASM error overlay */}
+        {/* GPU / WebGPU unavailable overlay */}
         {wasmError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-            <p className="max-w-sm text-center text-sm text-red-400">
-              WASM failed to load: {wasmError}
-            </p>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="mx-4 max-w-sm rounded-2xl border border-white/10 bg-zinc-900/90 px-8 py-7 text-center shadow-2xl">
+              {/* Circle with exclamation */}
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-amber-400/80 text-amber-400">
+                <span className="text-2xl font-bold leading-none">!</span>
+              </div>
+              <h2 className="mb-3 text-base font-semibold text-white">
+                Graphics Acceleration Unavailable
+              </h2>
+              <p className="text-sm leading-relaxed text-white/70">
+                We have a sick animation here, but your browser&apos;s Graphics Acceleration appears to be disabled. If you&apos;re on Windows, outdated graphics drivers can also cause this — try updating them and refreshing.
+              </p>
+            </div>
           </div>
         )}
 
         {/* Bottom HUD (audio + fullscreen) — hidden while fullscreen */}
         {!isFullscreen && (
           <div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center gap-2 bg-black/60 px-4 py-2 backdrop-blur-sm">
-            {/* Song selector */}
-            {songs.length > 0 && !uploadedSong && (
+
+            {/* Now playing label */}
+            <span className="max-w-[180px] truncate text-xs font-medium text-white/80">
+              {activeSong.title || "—"}
+            </span>
+
+            {/* Play-mode cycle */}
+            <button type="button" onClick={cyclePlayMode}
+              className="rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white hover:bg-zinc-800"
+              title="Cycle play mode">
+              {playModeLabel[playMode]}
+            </button>
+
+            {/* Song list (bundled) */}
+            {!uploadedSong && (
               <select
-                className="rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
-                value={songIdx}
-                onChange={(e) => {
-                  setSongIdx(Number(e.target.value));
-                  audioBufferRef.current = null;
-                  stopAudioSource();
-                  setIsPlaying(false);
-                }}
+                className="max-w-[150px] rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
+                value={activeSongIndex}
+                onChange={(e) => selectSongByIndex(Number(e.target.value))}
               >
-                {songs.map((s, i) => (
-                  <option key={i} value={i}>
-                    {s.title}
-                  </option>
+                {BUNDLED_SONGS.map((s, i) => (
+                  <option key={i} value={i}>{s.title}</option>
                 ))}
               </select>
             )}
 
             {uploadedSong && (
-              <span className="max-w-[160px] truncate text-xs text-white/70">
-                {uploadedSong.title}
-              </span>
+              <span className="max-w-[130px] truncate text-xs text-white/60">{uploadedSong.title}</span>
             )}
 
             {/* Upload */}
             <label className="cursor-pointer rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white hover:bg-zinc-800">
-              Upload music
-              <input
-                type="file"
-                accept="audio/*"
-                className="sr-only"
-                onChange={handleUpload}
-              />
+              Upload
+              <input type="file" accept="audio/*" className="sr-only" onChange={handleUpload} />
             </label>
 
-            {/* Playback controls */}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handlePlay}
-              disabled={!activeSong || isPlaying}
-              className="h-7 px-2 text-xs"
-            >
-              ▶ Play
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={pausePlayback}
-              disabled={!isPlaying}
-              className="h-7 px-2 text-xs"
-            >
-              ⏸ Pause
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={restartPlayback}
-              disabled={!activeSong}
-              className="h-7 px-2 text-xs"
-            >
-              ⏮ Restart
-            </Button>
+            {/* Transport */}
+            <Button size="sm" variant="ghost" onClick={handlePlay}      disabled={!activeSong.url || isPlaying} className="h-7 px-2 text-xs">▶ Play</Button>
+            <Button size="sm" variant="ghost" onClick={pausePlayback}   disabled={!isPlaying}                   className="h-7 px-2 text-xs">⏸ Pause</Button>
+            <Button size="sm" variant="ghost" onClick={restartPlayback} disabled={!activeSong.url}              className="h-7 px-2 text-xs">⏮ Restart</Button>
 
-            {/* Loop toggle */}
-            <label className="flex items-center gap-1 cursor-pointer text-xs">
-              <Checkbox
-                checked={isLooping}
-                onCheckedChange={(c) => {
-                  setIsLooping(!!c);
-                  if (audioSourceRef.current)
-                    audioSourceRef.current.loop = !!c;
-                }}
-              />
-              Loop
-            </label>
-
-            {audioError && (
-              <span className="text-xs text-red-400">{audioError}</span>
-            )}
+            {audioError && <span className="text-xs text-red-400">{audioError}</span>}
 
             <div className="ml-auto">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={enterFullscreen}
-                className="h-7 px-2 text-xs"
-              >
-                ⛶ Fullscreen
-              </Button>
+              <Button size="sm" variant="outline" onClick={enterFullscreen} className="h-7 px-2 text-xs">⛶ Fullscreen</Button>
             </div>
           </div>
         )}
