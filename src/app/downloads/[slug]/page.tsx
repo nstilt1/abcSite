@@ -6,6 +6,7 @@ import MetadataTable from "@/components/content/MetadataTable"
 import DownloadDialog from "@/components/content/DownloadDialog"
 import LicenseSection from "@/components/content/LicenseSection"
 import KaleidoHeroStatic from "@/components/KaleidoHeroStatic"
+import KaleidoInteractive from "@/components/KaleidoInteractive"
 import type { Download } from "@/types/content"
 import { isAllPlatforms } from "@/types/content"
 import { mediaURL, resolveSourceCodeUrl } from "@/lib/mediaURL"
@@ -123,9 +124,12 @@ export default async function DownloadSlugPage({ params }: PageProps) {
       </div>
 
       {isKaleidomo ? (
-        <div className="relative mt-6 w-full overflow-hidden rounded-2xl border bg-black aspect-video">
-          <KaleidoHeroStatic />
-        </div>
+        <>
+          <div className="relative mt-6 w-full overflow-hidden rounded-2xl border bg-black aspect-video">
+            <KaleidoHeroStatic />
+          </div>
+          <KaleidoInteractive />
+        </>
       ) : heroSrc ? (
         <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
           <Image
