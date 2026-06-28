@@ -128,12 +128,9 @@ interface Preset {
   name: string;
   imageIndex: number;
   circle: CircleConfig;
-  // Base reorientation speed (orientation cycles/sec independent of audio)
+  // Base reorientation speed in pixels/second of arc along the hero circle.
+  // Converted to cycles/sec inside WASM as: base_speed_cycles = px_s / (2π * hero_radius)
   orientationBaseSpeed: number;
-  // Beat pumping: how much audio peak affects orientation
-  audioOrientationAmount: number;
-  // Beat pumping: how much audio peak triggers reorientation jump
-  audioReorientationAmount: number;
   /**
    * Shared oscillator period in seconds.
    * rotation_cycles sweeps complete in this time, as do num_zoom_loops zoom
@@ -168,7 +165,7 @@ const PRESETS: Preset[] = [
     name: "Pink Bloom",
     imageIndex: 0,
     circle: { heroCircleLeftX: 515.1, heroCircleRightX: 1547.0, heroCircleY: 755.4, heroDesiredLeftRotation: 6.22 },
-    orientationBaseSpeed: 0.04, audioOrientationAmount: 0.18, audioReorientationAmount: 0.06,
+    orientationBaseSpeed: 19,
     animationDuration: 10,
     zoomMax: 0.909, zoomMin: 0.85, numZoomLoops: 4,
     rotationRange: 45, rotationCycles: 1, rotationFn: "sin2",
@@ -179,7 +176,7 @@ const PRESETS: Preset[] = [
     name: "Ivory Bloom",
     imageIndex: 1,
     circle: { heroCircleLeftX: 186.0, heroCircleRightX: 3024.0, heroCircleY: 1850.0, heroDesiredLeftRotation: 6.22 },
-    orientationBaseSpeed: 0.08, audioOrientationAmount: 0.25, audioReorientationAmount: 0.1,
+    orientationBaseSpeed: 38,
     animationDuration: 40,
     zoomMax: 0.95, zoomMin: 0.78, numZoomLoops: 2,
     rotationRange: 30, rotationCycles: 1, rotationFn: "sin",
@@ -190,7 +187,7 @@ const PRESETS: Preset[] = [
     name: "Profound Blue",
     imageIndex: 2,
     circle: { heroCircleLeftX: 330.0, heroCircleRightX: 2616.0, heroCircleY: 2265.0, heroDesiredLeftRotation: 6.22 },
-    orientationBaseSpeed: 0.015, audioOrientationAmount: 0.1, audioReorientationAmount: 0.03,
+    orientationBaseSpeed: 7,
     animationDuration: 40,
     zoomMax: 0.7, zoomMin: 0.6, numZoomLoops: 6,
     rotationRange: 20, rotationCycles: 1, rotationFn: "sin2",
@@ -322,8 +319,6 @@ interface ControlState {
   orientationPhase: number;
   // Audio reactive
   audioReactiveEnabled: boolean;
-  audioOrientationAmount: number;
-  audioReorientationAmount: number;
   audioPeakSmoothing: number;
   audioPeakFloor: number;
   audioPeakCeiling: number;
@@ -337,7 +332,7 @@ interface ControlState {
 
 function presetToControls(p: Preset): ControlState {
   return {
-    animationDuration: p.animationDuration,
+    animationDuration: 400,
     slices: 24, 
     fps: 30,
     zoomMax: p.zoomMax, 
@@ -354,17 +349,15 @@ function presetToControls(p: Preset): ControlState {
     hueStartOffset: 0, 
     hueFn: p.hueFn,
     hueRotation: p.hueRotation,
-    orientationBaseSpeed: p.orientationBaseSpeed, 
-    orientationPeakMultiplier: 0.25, 
+    orientationBaseSpeed: 2, 
+    orientationPeakMultiplier: 0.05, 
     orientationPhase: 0.0,
     audioReactiveEnabled: true,
-    audioOrientationAmount: p.audioOrientationAmount, 
-    audioReorientationAmount: p.audioReorientationAmount,
-    audioPeakSmoothing: 0.75, 
-    audioPeakFloor: 0.02, 
-    audioPeakCeiling: 0.7,
-    audioLowpassFreq: 169, 
-    audioLowpassSlope: 24,
+    audioPeakSmoothing: 0.0, 
+    audioPeakFloor: 0.00, 
+    audioPeakCeiling: 0.2,
+    audioLowpassFreq: 222, 
+    audioLowpassSlope: 6,
     tileCount: p.tileCount, 
     offsetX: p.offsetX, 
     offsetY: p.offsetY,
@@ -485,6 +478,9 @@ export default function KaleidoPageClient() {
     // rotation_cycles sweeps and num_zoom_loops zoom cycles complete.
     // It is NOT a loop timer — all modulate_by_time functions use rem_euclid
     // so they loop continuously. Value comes from the preset, not the UI.
+    //
+    // HARDCODED VALUE. We could use a preset-specific value, but I would 
+    // prefer to keep this at 400 seconds for simplicity.
     vs.animation_duration = 400;
     vs.fps = c.fps;
 
@@ -499,10 +495,15 @@ export default function KaleidoPageClient() {
 
     vs.orientation_base_speed = c.orientationBaseSpeed;
     vs.orientation_start_offset = c.orientationPhase;
+    // Disable the built-in orientation oscillator. WasmVideoSettings defaults
+    // orientation_duration to 201s with fn="none" (sawtooth), which wraps
+    // discontinuously every 201s from engine start and causes a visible position
+    // jump. KaleidoPageClient drives orientation purely via orientation_base_speed
+    // (continuous drift) + accumulated_orientation_offset (beat accumulator), so
+    // the built-in oscillator must be off. The WASM render loop skips it when <= 0.
+    vs.orientation_duration = 0.0;
 
     vs.audio_reactive_enabled      = c.audioReactiveEnabled;
-    vs.audio_orientation_amount    = c.audioOrientationAmount;
-    vs.audio_reorientation_amount  = c.audioReorientationAmount;
     vs.audio_peak_smoothing        = c.audioPeakSmoothing;
     vs.orientation_peak_multiplier = c.orientationPeakMultiplier;
 
@@ -670,6 +671,45 @@ export default function KaleidoPageClient() {
 
   // ── Audio ─────────────────────────────────────────────────────────────────
 
+  // Preload all bundled songs in the background after mount so that playback
+  // starts instantly without a network fetch delay. The decoded AudioBuffers
+  // are stored in a module-level cache keyed by URL so they survive component
+  // re-mounts. We intentionally do NOT store them in React state to avoid
+  // triggering re-renders. Errors during preload are silently swallowed —
+  // the normal loadAudioBuffer path will retry on user-initiated play.
+  const audioBufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Create a temporary AudioContext just for decoding; we close it after
+      // all songs are decoded so it doesn't block the real playback context.
+      let decodeCtx: AudioContext | null = null;
+      try {
+        decodeCtx = new AudioContext();
+        for (const song of BUNDLED_SONGS) {
+          if (cancelled) break;
+          if (audioBufferCacheRef.current.has(song.url)) continue;
+          try {
+            const resp = await fetch(song.url);
+            if (!resp.ok || cancelled) continue;
+            const arrayBuf = await resp.arrayBuffer();
+            if (cancelled) break;
+            const audioBuf = await decodeCtx.decodeAudioData(arrayBuf);
+            if (!cancelled) audioBufferCacheRef.current.set(song.url, audioBuf);
+          } catch {
+            // Swallow individual song errors — real playback will retry
+          }
+        }
+      } catch {
+        // Swallow AudioContext creation error
+      } finally {
+        try { await decodeCtx?.close(); } catch { /* */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // runs once on mount
+
   async function ensureAudioCtx() {
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
       audioCtxRef.current = new AudioContext();
@@ -686,6 +726,9 @@ export default function KaleidoPageClient() {
   }
 
   async function loadAudioBuffer(url: string): Promise<AudioBuffer> {
+    // Use the preloaded buffer if available so playback starts without a fetch delay
+    const cached = audioBufferCacheRef.current.get(url);
+    if (cached) return cached;
     const ctx = await ensureAudioCtx();
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status} loading audio`);
@@ -903,8 +946,8 @@ export default function KaleidoPageClient() {
       <FnSelect label="Hue Fn" value={controls.hueFn} onChange={(v) => set("hueFn", v)} />
 
       <SectionHeader>Orientation</SectionHeader>
-      <LabeledSlider label="Base Speed" value={controls.orientationBaseSpeed} min={0} max={25} step={0.001} onChange={(v) => set("orientationBaseSpeed", v)} />
-      <LabeledSlider label="Peak Multiplier" value={controls.orientationPeakMultiplier} min={0} max={5} step={0.05} onChange={(v) => set("orientationPeakMultiplier", v)} />
+      <LabeledSlider label="Base Speed (px/s)" value={controls.orientationBaseSpeed} min={0} max={500} step={1} decimals={0} onChange={(v) => set("orientationBaseSpeed", v)} />
+      <LabeledSlider label="Peak Multiplier" value={controls.orientationPeakMultiplier} min={0} max={5} step={0.01} onChange={(v) => set("orientationPeakMultiplier", v)} />
       <LabeledSlider label="Phase" value={controls.orientationPhase} min={0} max={1} step={0.001} onChange={(v) => set("orientationPhase", v)} />
 
       <SectionHeader>Source Crop</SectionHeader>
@@ -917,8 +960,6 @@ export default function KaleidoPageClient() {
         <Checkbox checked={controls.audioReactiveEnabled} onCheckedChange={(c) => set("audioReactiveEnabled", !!c)} />
         Enable audio reactivity
       </label>
-      <LabeledSlider label="Orientation Amt" value={controls.audioOrientationAmount} min={0} max={1} step={0.01} onChange={(v) => set("audioOrientationAmount", v)} />
-      <LabeledSlider label="Reorientation Amt" value={controls.audioReorientationAmount} min={0} max={1} step={0.01} onChange={(v) => set("audioReorientationAmount", v)} />
       <LabeledSlider label="Peak Smoothing" value={controls.audioPeakSmoothing} min={0} max={0.999} step={0.01} onChange={(v) => set("audioPeakSmoothing", v)} />
       <LabeledSlider label="Noise Gate" value={controls.audioPeakFloor} min={0} max={0.5} step={0.001} onChange={(v) => set("audioPeakFloor", v)} />
       <LabeledSlider label="Peak Clip" value={controls.audioPeakCeiling} min={0.05} max={1} step={0.001} onChange={(v) => set("audioPeakCeiling", v)} />
