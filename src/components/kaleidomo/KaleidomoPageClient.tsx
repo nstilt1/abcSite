@@ -100,15 +100,15 @@ const SOURCE_IMAGES: string[] = [
 interface Song { title: string; url: string; }
 
 const BUNDLED_SONGS: Song[] = [
-  { title: "Taking Off",            url: "/wasm-assets/audio-1.wav" },
-  { title: "Airborne",              url: "/wasm-assets/audio-2.wav" },
-  { title: "Suborbital Trajectory", url: "/wasm-assets/audio-3.wav" },
-  { title: "Black Hole",            url: "/wasm-assets/audio-4.wav" },
-  { title: "Time Travel",           url: "/wasm-assets/audio-5.wav" },
-  { title: "Reflection",            url: "/wasm-assets/audio-6.wav" },
-  { title: "Breaking the Cycle",    url: "/wasm-assets/audio-7.wav" },
-  { title: "Overcome",              url: "/wasm-assets/audio-8.wav" },
-  { title: "Rose-Tinted Kaleidomo", url: "/wasm-assets/audio-9.wav" },
+  { title: "Taking Off",            url: "/wasm-assets/audio-1.mp3" },
+  { title: "Airborne",              url: "/wasm-assets/audio-2.mp3" },
+  { title: "Suborbital Trajectory", url: "/wasm-assets/audio-3.mp3" },
+  { title: "Black Hole",            url: "/wasm-assets/audio-4.mp3" },
+  { title: "Time Travel",           url: "/wasm-assets/audio-5.mp3" },
+  { title: "Reflection",            url: "/wasm-assets/audio-6.mp3" },
+  { title: "Breaking the Cycle",    url: "/wasm-assets/audio-7.mp3" },
+  { title: "Overcome",              url: "/wasm-assets/audio-8.mp3" },
+  { title: "Rose-Tinted Kaleidomo", url: "/wasm-assets/audio-9.mp3" },
 ];
 
 // ─── Playback mode ────────────────────────────────────────────────────────────
