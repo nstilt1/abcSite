@@ -41,51 +41,6 @@ const nextConfig: NextConfig = {
         destination:
           "https://hephaestus.alteredbrainchemistry.com/images/IMG_20260627_185912.jpg",
       },
-      {
-        source: "/wasm-assets/audio-1.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/1-taking-off-pc56.wav",
-      },
-      {
-        source: "/wasm-assets/audio-2.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/2-airborne-c16.wav",
-      },
-      {
-        source: "/wasm-assets/audio-3.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/3-suborbital-trajectory-c3.wav",
-      },
-      {
-        source: "/wasm-assets/audio-4.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/4-black-hole-pc40.wav",
-      },
-      {
-        source: "/wasm-assets/audio-5.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/5-time-travel-pc39.wav",
-      },
-      {
-        source: "/wasm-assets/audio-6.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/6-reflection-c9.wav",
-      },
-      {
-        source: "/wasm-assets/audio-7.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/7-breaking-the-cycle-pc43.wav",
-      },
-      {
-        source: "/wasm-assets/audio-8.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/8-overcome-c4.wav",
-      },
-      {
-        source: "/wasm-assets/audio-9.wav",
-        destination:
-          "https://hephaestus.alteredbrainchemistry.com/media/uploads/9-rose-tinted-kaleidomo-pwp.wav",
-      },
     ];
   },
   async headers() {
