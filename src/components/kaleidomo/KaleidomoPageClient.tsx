@@ -64,6 +64,35 @@ let wasmModPromise: Promise<any> | null = null;
 
 const KALEIDO_TYPE_IDX: number = 4;
 
+// ─── Mobile layout constants ──────────────────────────────────────────────────
+
+// Matches Tailwind's `md` breakpoint — below this width we render the
+// YouTube-style mobile layout (mini-player + sticky settings sheet) instead
+// of the desktop left-panel layout.
+const MOBILE_BREAKPOINT_PX = 768;
+
+// Height (px) of the collapsed "mini player" canvas region on mobile when the
+// settings sheet is open — i.e. the strip the canvas shrinks into, beneath
+// which the sticky Settings header + scrollable settings list live.
+const MOBILE_MINI_PLAYER_HEIGHT_PX = 220;
+
+// Vertical swipe distance (px) required to toggle between the mobile
+// fullscreen canvas view and the settings sheet view.
+const MOBILE_SWIPE_THRESHOLD_PX = 50;
+
+/**
+ * Direction the canvas rotates on mobile while in the fullscreen view, so the
+ * tileCount — which normally counts tiles fitting horizontally — instead
+ * counts tiles fitting vertically (matching a portrait phone's aspect ratio).
+ * 1 = rotate right (clockwise) 90deg, -1 = rotate left (counter-clockwise) 90deg.
+ * Not certain which reads correctly against the WASM render — flip this
+ * constant if the rotation direction looks wrong. The rotation is only ever
+ * applied in the mobile fullscreen view; it is automatically un-applied
+ * (reverted to 0deg) when swiping down into the settings sheet view, and
+ * re-applied when swiping back up into fullscreen — see `mobileRotated` below.
+ */
+const MOBILE_ROTATE_DIRECTION: 1 | -1 = -1;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getWasmMod(): Promise<any> {
   if (!wasmModPromise) {
@@ -462,6 +491,72 @@ export default function KaleidoPageClient() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Mobile layout ─────────────────────────────────────────────────────────
+  // Below MOBILE_BREAKPOINT_PX we swap to the YouTube-style mobile layout:
+  // a "fullscreen" view (canvas fills the viewport) and a "settings" view
+  // (canvas shrinks to a mini-player strip, settings sheet slides up from
+  // the bottom). The two views are toggled by vertical swipe gestures.
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileView, setMobileView] = useState<"fullscreen" | "settings">("fullscreen");
+  // Tracks actual viewport pixels so the rotated mobile canvas can swap its
+  // width/height to match (CSS rotate() doesn't reflow layout on its own).
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`);
+    function updateIsMobile() { setIsMobile(mq.matches); }
+    updateIsMobile();
+    mq.addEventListener("change", updateIsMobile);
+    return () => mq.removeEventListener("change", updateIsMobile);
+  }, []);
+
+  useEffect(() => {
+    function updateViewport() { setViewport({ w: window.innerWidth, h: window.innerHeight }); }
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, []);
+
+  // True only in the mobile fullscreen view — drives both the CSS rotation
+  // of the canvas and the WASM backing-resolution swap below.
+  const mobileRotated = isMobile && mobileView === "fullscreen";
+
+  // ── Mobile swipe gestures ─────────────────────────────────────────────────
+  // Simple commit-on-release swipe detection (not a live drag-follow) — the
+  // CSS transitions on the canvas wrapper / settings sheet below provide the
+  // slide animation once mobileView flips.
+
+  const touchStartYRef = useRef<number | null>(null);
+  const settingsContentRef = useRef<HTMLDivElement | null>(null);
+
+  function handleMobileTouchStart(e: React.TouchEvent) {
+    if (!isMobile) return;
+    touchStartYRef.current = e.touches[0]?.clientY ?? null;
+  }
+
+  function handleMobileTouchEnd(e: React.TouchEvent) {
+    if (!isMobile || touchStartYRef.current === null) return;
+    const endY = e.changedTouches[0]?.clientY ?? touchStartYRef.current;
+    const deltaY = endY - touchStartYRef.current; // negative = swiped up, positive = swiped down
+    touchStartYRef.current = null;
+
+    if (mobileView === "fullscreen" && deltaY < -MOBILE_SWIPE_THRESHOLD_PX) {
+      // Swiped up away from the fullscreen canvas -> reveal the settings sheet
+      setMobileView("settings");
+    } else if (mobileView === "settings" && deltaY > MOBILE_SWIPE_THRESHOLD_PX) {
+      // Only collapse back to fullscreen once the settings list itself is
+      // already scrolled to the top — mirrors the YouTube app, where a
+      // downward swipe inside a scrolled list scrolls the list first.
+      const scrollTop = settingsContentRef.current?.scrollTop ?? 0;
+      if (scrollTop <= 0) setMobileView("fullscreen");
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function set<K extends keyof ControlState>(key: K, value: ControlState[K]) {
@@ -642,13 +737,22 @@ export default function KaleidoPageClient() {
     if (!canvas) return;
     function resize() {
       if (!canvas) return;
-      canvas.width  = isFullscreen ? window.screen.width  : 1920;
-      canvas.height = isFullscreen ? window.screen.height : 1080;
+      if (mobileRotated) {
+        // Mobile fullscreen view: canvas is visually rotated 90deg via CSS
+        // (see render below), so swap the backing resolution to match —
+        // width becomes the viewport height and vice versa — otherwise the
+        // rendered image is stretched/blurry after rotation.
+        canvas.width  = window.innerHeight;
+        canvas.height = window.innerWidth;
+      } else {
+        canvas.width  = isFullscreen ? window.screen.width  : 1920;
+        canvas.height = isFullscreen ? window.screen.height : 1080;
+      }
     }
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, [isFullscreen]);
+  }, [isFullscreen, mobileRotated]);
 
   // ── Fullscreen ────────────────────────────────────────────────────────────
 
@@ -988,23 +1092,96 @@ export default function KaleidoPageClient() {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-black text-white">
-      {/* Left controls panel (hidden while fullscreen) */}
+    // Mobile-first: stacked column (video on top, settings sheet below) by
+    // default; md: switches to the original desktop two-column layout.
+    // h-screen + overflow-hidden on the root means the only scrollable areas
+    // anywhere on the page are the mobile settings list (below) and the
+    // desktop aside — matching the "no page scroll" requirement.
+    <div
+      className="flex h-screen w-full flex-col overflow-hidden bg-black text-white md:flex-row"
+      onTouchStart={handleMobileTouchStart}
+      onTouchEnd={handleMobileTouchEnd}
+    >
+      {/* Settings panel:
+          - Desktop (md+): original static left-hand column, hidden while fullscreen.
+          - Mobile: a bottom sheet, fixed to the viewport, slid fully off-screen
+            (translate-y-full) in the "fullscreen" view and slid into place
+            (translate-y-0) in the "settings" view — this is the swipe-up-from-
+            video transition. Always mounted on mobile (never unmounted) so the
+            slide is an animation, not a re-render. */}
       {!isFullscreen && (
-        <aside className="w-64 shrink-0 overflow-y-auto border-r border-white/10 bg-zinc-950">
-          {controlPanel}
+        <aside
+          className={`z-20 flex flex-col bg-zinc-950 transition-transform duration-300 ease-out
+            fixed inset-x-0 bottom-0 border-t border-white/10
+            ${mobileView === "settings" ? "translate-y-0" : "translate-y-full"}
+            md:static md:inset-auto md:z-auto md:h-screen md:w-64 md:shrink-0
+            md:translate-y-0 md:border-t-0 md:border-r md:border-white/10`}
+          style={{ height: isMobile ? `calc(100dvh - ${MOBILE_MINI_PLAYER_HEIGHT_PX}px)` : undefined }}
+        >
+          {/* Sticky "Settings" header — mobile only. Stays pinned to the top of
+              the sheet (never scrolls away) while the content below it scrolls,
+              until the user swipes back down to the fullscreen view. */}
+          <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-white/10 bg-zinc-950/95 px-4 py-3 backdrop-blur-sm md:hidden">
+            <h2 className="text-sm font-semibold tracking-wide">Settings</h2>
+            <div className="flex items-center gap-4 text-white/70">
+              <button type="button" title="Info" aria-label="Info" className="text-base leading-none hover:text-white">Φ</button>
+              <button type="button" title="Close" aria-label="Close settings"
+                onClick={() => setMobileView("fullscreen")}
+                className="text-lg leading-none hover:text-white">
+                ×
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable settings content — independently scrollable from the
+              video above; on mobile its scrollTop also gates the swipe-down
+              gesture (see handleMobileTouchEnd) so it must reach the top
+              before swiping down collapses the sheet, like YouTube comments. */}
+          <div ref={settingsContentRef} className="flex-1 overflow-y-auto">
+            {controlPanel}
+          </div>
         </aside>
       )}
 
-      {/* Main canvas + overlay */}
-      <div ref={containerRef} className="relative flex flex-1 flex-col items-center justify-center bg-black">
-        {/* Canvas */}
+      {/* Main canvas + overlay.
+          On mobile this wrapper IS the "video player": full viewport height
+          in the fullscreen view, collapsing to a thin mini-player strip
+          (MOBILE_MINI_PLAYER_HEIGHT_PX) when the settings sheet is open —
+          same pinned-to-top behavior as the YouTube app. */}
+      <div
+        ref={containerRef}
+        className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-black transition-[height] duration-300 ease-out"
+        style={{ height: isMobile ? (mobileView === "fullscreen" ? "100dvh" : `${MOBILE_MINI_PLAYER_HEIGHT_PX}px`) : undefined }}
+        onClick={() => {
+          // Tap the mini-player to re-expand, like tapping a YouTube mini-player.
+          if (isMobile && mobileView === "settings") setMobileView("fullscreen");
+        }}
+      >
+        {/* Canvas — on mobile, while in the fullscreen view, it's rotated
+            MOBILE_ROTATE_DIRECTION * 90deg so the tileCount (normally counted
+            horizontally) is counted vertically instead, matching a portrait
+            phone. Centered via absolute positioning + transform since CSS
+            rotate() doesn't reflow the box itself. Reverts to the normal
+            (unrotated) h-full/w-full layout in the mini-player/settings view
+            and on desktop. */}
         <canvas
           ref={canvasRef}
           width={1920}
           height={1080}
-          className="h-full w-full object-contain"
-          style={{ display: "block" }}
+          className={mobileRotated ? undefined : "h-full w-full object-contain"}
+          style={
+            mobileRotated
+              ? {
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  width: viewport.h ? `${viewport.h}px` : "100vh",
+                  height: viewport.w ? `${viewport.w}px` : "100vw",
+                  transform: `translate(-50%, -50%) rotate(${MOBILE_ROTATE_DIRECTION * 90}deg)`,
+                  display: "block",
+                }
+              : { display: "block" }
+          }
         />
 
         {/* GPU / WebGPU unavailable overlay */}
@@ -1025,9 +1202,9 @@ export default function KaleidoPageClient() {
           </div>
         )}
 
-        {/* Bottom HUD (audio + fullscreen) — hidden while fullscreen */}
+        {/* Bottom HUD (audio + fullscreen) — desktop only, hidden while fullscreen */}
         {!isFullscreen && (
-          <div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center gap-2 bg-black/60 px-4 py-2 backdrop-blur-sm">
+          <div className="absolute bottom-0 left-0 right-0 hidden flex-wrap items-center gap-2 bg-black/60 px-4 py-2 backdrop-blur-sm md:flex">
 
             {/* Now playing label */}
             <span className="max-w-[180px] truncate text-xs font-medium text-white/80">
@@ -1074,6 +1251,60 @@ export default function KaleidoPageClient() {
             <div className="ml-auto">
               <Button size="sm" variant="outline" onClick={enterFullscreen} className="h-7 px-2 text-xs">⛶ Fullscreen</Button>
             </div>
+          </div>
+        )}
+
+        {/* Mobile HUD — compact transport/song-select bar overlayed on (or, in
+            the mini-player state, sitting at the bottom of) the video section,
+            mirroring a standard mobile video player layout. stopPropagation
+            keeps taps on these controls from also triggering the mini-player
+            tap-to-expand handler on the wrapping div above. */}
+        {isMobile && !isFullscreen && (
+          <div
+            className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-1.5 overflow-x-auto bg-black/70 px-2 py-2 backdrop-blur-sm md:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="max-w-[88px] shrink-0 truncate text-[11px] font-medium text-white/80">
+              {activeSong.title || "—"}
+            </span>
+
+            <Button size="sm" variant="ghost" onClick={handlePlay}      disabled={!activeSong.url || isPlaying} className="h-7 shrink-0 px-2 text-xs">▶</Button>
+            <Button size="sm" variant="ghost" onClick={pausePlayback}   disabled={!isPlaying}                   className="h-7 shrink-0 px-2 text-xs">⏸</Button>
+            <Button size="sm" variant="ghost" onClick={restartPlayback} disabled={!activeSong.url}              className="h-7 shrink-0 px-2 text-xs">⏮</Button>
+
+            {!uploadedSong && (
+              <select
+                className="max-w-[90px] shrink-0 rounded border border-white/20 bg-zinc-900 px-1 py-1 text-[11px] text-white"
+                value={activeSongIndex}
+                onChange={(e) => selectSongByIndex(Number(e.target.value))}
+              >
+                {BUNDLED_SONGS.map((s, i) => (
+                  <option key={i} value={i}>{s.title}</option>
+                ))}
+              </select>
+            )}
+
+            {uploadedSong && (
+              <span className="max-w-[80px] shrink-0 truncate text-[11px] text-white/60">{uploadedSong.title}</span>
+            )}
+
+            {/* Upload */}
+            <label className="shrink-0 cursor-pointer rounded border border-white/20 bg-zinc-900 px-2 py-1 text-[11px] text-white">
+              Upload
+              <input type="file" accept="audio/*" className="sr-only" onChange={handleUpload} />
+            </label>
+
+            {audioError && <span className="shrink-0 truncate text-[10px] text-red-400">{audioError}</span>}
+
+            {/* Tap affordance equivalent to the swipe gesture */}
+            <button
+              type="button"
+              onClick={() => setMobileView(mobileView === "fullscreen" ? "settings" : "fullscreen")}
+              className="ml-auto shrink-0 rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
+              title={mobileView === "fullscreen" ? "Open settings" : "Collapse settings"}
+            >
+              {mobileView === "fullscreen" ? "▲" : "▼"}
+            </button>
           </div>
         )}
 
