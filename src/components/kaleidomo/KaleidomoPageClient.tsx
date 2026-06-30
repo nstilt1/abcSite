@@ -71,6 +71,12 @@ const KALEIDO_TYPE_IDX: number = 4;
 // of the desktop left-panel layout.
 const MOBILE_BREAKPOINT_PX = 768;
 
+// Height (px) of the empty spacer rendered above the sticky video section on
+// mobile — pure scroll room so the user can pull/scroll down by this amount
+// to peek at whatever sits above this component (e.g. the site navbar),
+// without that navbar permanently eating into the video's screen space.
+const MOBILE_NAVBAR_PEEK_PX = 56;
+
 // Height (px) of the collapsed "mini player" canvas region on mobile when the
 // settings sheet is open — i.e. the strip the canvas shrinks into, beneath
 // which the sticky Settings header + scrollable settings list live.
@@ -528,44 +534,23 @@ export default function KaleidoPageClient() {
   // of the canvas and the WASM backing-resolution swap below.
   const mobileRotated = isMobile && mobileView === "fullscreen";
 
-  // ── Mobile scroll-driven view ─────────────────────────────────────────────
-  // rootRef wraps the whole component (used to scroll back up into the
-  // fullscreen view). sentinelRef is a 1px marker placed immediately after
-  // the (sticky) video section, before the settings sheet — once it scrolls
-  // into the viewport the video has finished collapsing to its mini-player
-  // height, so we flip to the settings view; once it scrolls back out
-  // (user scrolled up) we flip back to fullscreen.
+  // ── Mobile view control ───────────────────────────────────────────────────
+  // mobileView is now driven explicitly (button taps / mini-player tap) rather
+  // than inferred from scroll position — the previous IntersectionObserver
+  // approach was unreliable. rootRef is still used to smooth-scroll the
+  // fullscreen video section back under the navbar-peek spacer when entering
+  // the fullscreen view.
 
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!isMobile) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setMobileView(entry?.isIntersecting ? "settings" : "fullscreen"),
-      { threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [isMobile]);
-
-  // On first becoming mobile, scroll the component's top edge to the top of
-  // the viewport so the video starts fullscreen (any navbar above it is
-  // scrolled just out of view, reachable again by pulling/scrolling up).
-  useEffect(() => {
-    if (isMobile) rootRef.current?.scrollIntoView({ block: "start" });
-  }, [isMobile]);
-
-  // Manual fallbacks for tapping (rather than scrolling) between views — both
-  // just scroll the page; the IntersectionObserver above updates mobileView
-  // as a natural result, so state never gets out of sync with scroll position.
-  function scrollToMobileFullscreen() {
+  function enterMobileFullscreen() {
+    setMobileView("fullscreen");
+    // Scroll the spacer above the video back into place so the video sits
+    // flush at the top, ready to be pulled down again to reveal the navbar.
     rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
-  function scrollToMobileSettings() {
-    sentinelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  function enterMobileSettings() {
+    setMobileView("settings");
   }
 
   // ── Desktop fullscreen "taskbar" ──────────────────────────────────────────
@@ -1121,29 +1106,29 @@ export default function KaleidoPageClient() {
 
   return (
     // Mobile-first: normal block flow (NOT h-screen/overflow-hidden) so the
-    // real page can scroll — this lets pulling up past the (sticky) video
-    // section reveal whatever sits above this component (e.g. a site navbar)
-    // and pulling down past the settings sheet reach the footer. Desktop
-    // (md+) keeps the original fixed two-column h-screen layout. Children
-    // are ordered video -> sentinel -> settings in the DOM so mobile flex-col
-    // (default, no order override) shows video-on-top/settings-below, while
-    // md:order-* below re-arranges settings to the left for the desktop
-    // two-column layout.
+    // real page can scroll. A small spacer above the sticky video section
+    // gives just enough scroll room to pull down and peek at whatever sits
+    // above this component (e.g. a site navbar) without it permanently
+    // eating into the video's screen space. Desktop (md+) keeps the original
+    // fixed two-column h-screen layout (the spacer is hidden there).
     <div ref={rootRef} className="flex w-full flex-col bg-black text-white md:h-screen md:flex-row md:overflow-hidden">
+      {/* Navbar-peek spacer — mobile only, sits above the sticky video. */}
+      <div className="w-full md:hidden" style={{ height: MOBILE_NAVBAR_PEEK_PX }} aria-hidden="true" />
+
       {/* Main canvas + overlay.
           On mobile this wrapper IS the "video player": `position: sticky`
           pins it to the top of the viewport. At its full height (100dvh) it
-          fills the screen; once the user has scrolled down by roughly that
-          much it naturally settles at MOBILE_MINI_PLAYER_HEIGHT_PX tall,
-          mini-player style, with the settings sheet beneath it — same
-          pinned-to-top behavior as the YouTube app, but via real scroll. */}
+          fills the screen; the mini-player height kicks in once mobileView
+          is switched to "settings" (via the Fullscreen/collapse buttons
+          below, or by tapping the mini-player itself) — same pinned-to-top
+          behavior as the YouTube app. */}
       <div
         ref={containerRef}
         className="sticky top-0 z-30 flex w-full flex-col items-center justify-center overflow-hidden bg-black transition-[height] duration-300 ease-out md:z-auto md:order-2 md:h-screen md:flex-1"
         style={{ height: isMobile ? (mobileView === "fullscreen" ? "100dvh" : `${MOBILE_MINI_PLAYER_HEIGHT_PX}px`) : undefined }}
         onClick={() => {
           // Tap the mini-player to re-expand, like tapping a YouTube mini-player.
-          if (isMobile && mobileView === "settings") scrollToMobileFullscreen();
+          if (isMobile && mobileView === "settings") enterMobileFullscreen();
         }}
       >
         {/* Canvas — on mobile, while in the fullscreen view, it's rotated
@@ -1276,11 +1261,11 @@ export default function KaleidoPageClient() {
               </span>
               <button
                 type="button"
-                onClick={mobileView === "fullscreen" ? scrollToMobileSettings : scrollToMobileFullscreen}
+                onClick={mobileView === "fullscreen" ? enterMobileSettings : enterMobileFullscreen}
                 className="shrink-0 rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
-                title={mobileView === "fullscreen" ? "Open settings" : "Collapse settings"}
+                title={mobileView === "fullscreen" ? "Open settings" : "Enter fullscreen"}
               >
-                {mobileView === "fullscreen" ? "▲" : "▼"}
+                {mobileView === "fullscreen" ? "Settings ▾" : "⛶ Fullscreen"}
               </button>
             </div>
 
@@ -1327,25 +1312,18 @@ export default function KaleidoPageClient() {
         )}
       </div>
 
-      {/* Sentinel — mobile only, sits right after the sticky video section.
-          Drives the IntersectionObserver above: once this scrolls into view
-          the video has finished collapsing into the mini-player, so we're in
-          the settings view; once it scrolls back out we're back to fullscreen. */}
-      <div ref={sentinelRef} className="h-px w-full md:hidden" aria-hidden="true" />
-
       {/* Settings panel:
           - Desktop (md+): original static left-hand column (re-ordered to the
             left via md:order-1), hidden while fullscreen.
-          - Mobile: flows normally BELOW the video section + sentinel above,
-            never fixed/translated — it scrolls into place with the page. Its
+          - Mobile: flows normally BELOW the video section, never
+            fixed/translated — it scrolls into place with the page. Its
             "Settings" header is sticky so it pins under the collapsed
-            mini-player once reached, until the user scrolls back up past it. */}
+            mini-player while open. */}
       {!isFullscreen && (
         <aside className="flex w-full flex-col bg-zinc-950 md:order-1 md:h-screen md:w-64 md:shrink-0 md:border-r md:border-white/10">
           {/* Sticky "Settings" header — mobile only. Pins to the top of the
               viewport (just under the collapsed mini-player) while the
-              content below it scrolls, until the user scrolls back up past
-              the video section into the fullscreen view. */}
+              content below it scrolls. */}
           <div
             className="sticky z-10 flex shrink-0 items-center justify-between border-b border-t border-white/10 bg-zinc-950/95 px-4 py-3 backdrop-blur-sm md:hidden"
             style={{ top: MOBILE_MINI_PLAYER_HEIGHT_PX }}
@@ -1354,7 +1332,7 @@ export default function KaleidoPageClient() {
             <div className="flex items-center gap-4 text-white/70">
               <button type="button" title="Info" aria-label="Info" className="text-base leading-none hover:text-white">Φ</button>
               <button type="button" title="Close" aria-label="Close settings"
-                onClick={scrollToMobileFullscreen}
+                onClick={enterMobileFullscreen}
                 className="text-lg leading-none hover:text-white">
                 ×
               </button>
