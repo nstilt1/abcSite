@@ -7,8 +7,8 @@ import DownloadDialog from "@/components/content/DownloadDialog"
 import LicenseSection from "@/components/content/LicenseSection"
 import KaleidoHeroStatic from "@/components/KaleidoHeroStatic"
 import KaleidoInteractive from "@/components/KaleidoInteractive"
-import type { Download } from "@/types/content"
-import { isAllPlatforms } from "@/types/content"
+import type { Download, WebExtensionLink } from "@/types/content"
+import { isAllPlatforms, isWebExtension } from "@/types/content"
 import { mediaURL, resolveSourceCodeUrl } from "@/lib/mediaURL"
 import type { Metadata } from "next"
 
@@ -35,6 +35,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 function detectPlatforms(d: Download): string {
   const info = d.downloadInfo
   if (isAllPlatforms(info)) return "All platforms"
+  if (isWebExtension(info)) {
+    return info.webExtensionLinks.map((l) => l.label).filter(Boolean).join(", ") || "—"
+  }
   const plats: string[] = []
   if (info.windowsDownloadLink) plats.push("Windows")
   if (info.macosDownloadLink) plats.push("macOS")
@@ -70,21 +73,25 @@ export default async function DownloadSlugPage({ params }: PageProps) {
   // all non-empty link fields regardless of which shape the object appears to be.
   const hasDownloadLinks = (() => {
     const info = item.downloadInfo as Record<string, unknown>
+    const webExtLinks = info.webExtensionLinks as WebExtensionLink[] | undefined
     return !!(
       (typeof info.allPlatformsDownloadLink === "string" && info.allPlatformsDownloadLink.trim()) ||
       (typeof info.windowsDownloadLink === "string" && info.windowsDownloadLink.trim()) ||
       (typeof info.macosDownloadLink === "string" && info.macosDownloadLink.trim()) ||
-      (typeof info.linuxDownloadLink === "string" && info.linuxDownloadLink.trim())
+      (typeof info.linuxDownloadLink === "string" && info.linuxDownloadLink.trim()) ||
+      (Array.isArray(webExtLinks) && webExtLinks.some((l) => l.url?.trim()))
     )
   })()
 
+  const isWebExt = isWebExtension(item.downloadInfo)
+
   const rows = [
-    { label: "Version",    value: item.version ?? null },
-    { label: "Date Added", value: item.dateAdded ?? null },
-    { label: "Platforms",  value: detectPlatforms(item) },
-    { label: "License",    value: licenseLabel },
+    { label: "Version",                        value: item.version ?? null },
+    { label: "Date Added",                     value: item.dateAdded ?? null },
+    { label: isWebExt ? "Available For" : "Platforms", value: detectPlatforms(item) },
+    { label: "License",                        value: licenseLabel },
     hasDownloadLinks
-      ? { label: "Download", value: <DownloadDialog download={item} /> }
+      ? { label: isWebExt ? "Get Extension" : "Download", value: <DownloadDialog download={item} /> }
       : null,
     sourceUrl
       ? {
