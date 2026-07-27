@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { isValidSection, ADMIN_SECTIONS } from "@/lib/adminSections"
+import { getCollection } from "@/lib/contentStore"
 import AdminSectionClient from "@/components/admin/AdminSectionClient"
 import type { AdminSection } from "@/types/content"
 import type { Metadata } from "next"
@@ -19,30 +20,31 @@ const CONTENT_FILE_BY_SECTION: Record<AdminSection, ContentFileName> = {
   webapps: "webapps.json",
 }
 
-function getCdnContentUrl(section: AdminSection): string {
+function getCdnContentUrl(section: AdminSection): string | null {
   const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL?.trim()
-
-  if (!cdnUrl) {
-    throw new Error("Missing NEXT_PUBLIC_CDN_URL environment variable")
-  }
-
+  if (!cdnUrl) return null
   const baseUrl = cdnUrl.replace(/\/+$/, "")
   const filename = CONTENT_FILE_BY_SECTION[section]
   const url = new URL(`${baseUrl}/content/${filename}`)
-
   url.searchParams.set("t", Date.now().toString())
-
   return url.toString()
 }
 
 async function fetchAdminSectionItems(section: AdminSection): Promise<Record<string, unknown>[]> {
   const url = getCdnContentUrl(section)
+
+  // No CDN URL configured (e.g. localhost dev) — fall back to the local content
+  // files synced from S3 at build time. The client's "Sync from S3" button
+  // fetches live data via the /api/admin/sync proxy in all environments.
+  if (!url) {
+    return getCollection(section as Parameters<typeof getCollection>[0]) as Record<string, unknown>[]
+  }
+
   const response = await fetch(url, { cache: "no-store" })
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch ${CONTENT_FILE_BY_SECTION[section]}: ${response.status} ${response.statusText}`,
-    )
+    console.error(`CDN fetch failed for ${section}: ${response.status} ${response.statusText} — falling back to local content`)
+    return getCollection(section as Parameters<typeof getCollection>[0]) as Record<string, unknown>[]
   }
 
   return (await response.json()) as Record<string, unknown>[]
