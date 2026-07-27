@@ -23,8 +23,6 @@ frontend:
           PRESIGN_URL=$PRESIGN_URL
           UPDATE_FN_URL=$UPDATE_FN_URL
           SOFTWARE_LICENSOR_DISPATCH_API=$SOFTWARE_LICENSOR_DISPATCH_API
-          S3_BUCKET_NAME=$S3_BUCKET_NAME
-          REGION=$REGION
           ENV
 
         # ── Fetch REBUILD_URL from SSM ────────────────────────────────────────

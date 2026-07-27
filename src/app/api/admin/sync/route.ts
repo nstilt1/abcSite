@@ -1,8 +1,9 @@
 // src/app/api/admin/sync/route.ts
-// Server-side proxy for fetching live content.
-// On production: fetches directly from S3 origin to bypass CloudFront's cache,
-// ensuring the admin always sees the latest deployed data.
-// On localhost: falls back to the CDN URL (CORS isn't an issue server-side).
+// Server-side proxy for fetching live content from the CDN.
+// The client can't fetch hephaestus directly on localhost due to CORS, so this
+// route does the fetch server-side (no CORS restrictions) and forwards the JSON.
+// CloudFront's /content/* behavior has caching disabled (TTL=0) so this always
+// returns the latest data written to S3 by update_content_abc.
 import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
@@ -12,23 +13,6 @@ const CONTENT_FILES: Record<string, string> = {
   blogs:     "blogs.json",
   products:  "products.json",
   webapps:   "webapps.json",
-}
-
-function getContentUrl(filename: string): string | null {
-  // Prefer direct S3 origin to bypass CloudFront cache
-  const bucket = process.env.S3_BUCKET_NAME?.trim()
-  const region = process.env.REGION?.trim()
-  if (bucket && region) {
-    return `https://${bucket}.s3.${region}.amazonaws.com/content/${filename}`
-  }
-
-  // Localhost fallback: use CDN URL (server-side fetch has no CORS restriction)
-  const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL?.replace(/\/+$/, "")
-  if (cdnUrl) {
-    return `${cdnUrl}/content/${filename}`
-  }
-
-  return null
 }
 
 export async function GET(request: NextRequest) {
@@ -41,13 +25,15 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const url = getContentUrl(CONTENT_FILES[section])
-  if (!url) {
+  const cdnUrl = process.env.NEXT_PUBLIC_CDN_URL?.replace(/\/+$/, "")
+  if (!cdnUrl) {
     return NextResponse.json(
-      { error: "Missing S3_BUCKET_NAME/REGION and NEXT_PUBLIC_CDN_URL environment variables" },
+      { error: "Missing NEXT_PUBLIC_CDN_URL environment variable" },
       { status: 500 },
     )
   }
+
+  const url = `${cdnUrl}/content/${CONTENT_FILES[section]}`
 
   const upstream = await fetch(url, { cache: "no-store" })
   if (!upstream.ok) {
