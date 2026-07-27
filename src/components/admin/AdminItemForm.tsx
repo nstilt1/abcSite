@@ -331,7 +331,14 @@ function DownloadFields({
 }) {
   const info = (data.downloadInfo as Record<string, unknown>) ?? {}
   const isAllPlatforms = "allPlatformsDownloadLink" in info
+  const isWebExtension = "webExtensionLinks" in info
+  const downloadType: "universal" | "per_platform" | "web_extension" = isAllPlatforms
+    ? "universal"
+    : isWebExtension
+    ? "web_extension"
+    : "per_platform"
   const licensor = (data.software_licensor as Record<string, unknown> | null) ?? null
+  const webExtLinks = (info.webExtensionLinks as { label: string; url: string }[]) ?? []
 
   return (
     <>
@@ -347,30 +354,42 @@ function DownloadFields({
 
       <Separator />
 
-      {/* Download type toggle */}
+      {/* Download type selector */}
       <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Download Type</span>
-          <Badge variant="outline">{isAllPlatforms ? "Universal (All Platforms)" : "Per Platform"}</Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (isAllPlatforms) {
-                set("downloadInfo", {})
-              } else {
-                set("downloadInfo", {
-                  allPlatformsDownloadLink: "",
-                  allPlatformsDownloadSha256: "",
-                })
-              }
-            }}
-          >
-            Switch to {isAllPlatforms ? "Per-Platform" : "Universal"}
-          </Button>
+        <span className="text-sm font-medium">Download Type</span>
+        <div className="grid grid-cols-3 gap-2">
+          {(
+            [
+              { value: "universal", label: "Universal", description: "One link that works on all platforms." },
+              { value: "per_platform", label: "Per Platform", description: "Separate installer links for Windows/macOS/Linux." },
+              { value: "web_extension", label: "Web Extension", description: "Links out to browser extension stores (Chrome, Edge, etc)." },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                if (opt.value === "universal") {
+                  set("downloadInfo", { allPlatformsDownloadLink: "", allPlatformsDownloadSha256: "" })
+                } else if (opt.value === "per_platform") {
+                  set("downloadInfo", {})
+                } else {
+                  set("downloadInfo", { webExtensionLinks: [] })
+                }
+              }}
+              className={`rounded-lg border p-3 text-left text-xs transition-colors focus:outline-none ${
+                downloadType === opt.value
+                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <div className="font-semibold">{opt.label}</div>
+              <div className="text-muted-foreground mt-0.5">{opt.description}</div>
+            </button>
+          ))}
         </div>
 
-        {isAllPlatforms ? (
+        {downloadType === "universal" && (
           <div className="space-y-3 pl-4 border-l">
             <FieldRow
               label="Download Link"
@@ -384,7 +403,9 @@ function DownloadFields({
               onChange={(v) => set("downloadInfo", { ...info, allPlatformsDownloadSha256: v })}
             />
           </div>
-        ) : (
+        )}
+
+        {downloadType === "per_platform" && (
           <div className="space-y-3 pl-4 border-l">
             {(["windows", "macos", "linux"] as const).map((platform) => (
               <div key={platform} className="space-y-2">
@@ -401,6 +422,60 @@ function DownloadFields({
                 />
               </div>
             ))}
+          </div>
+        )}
+
+        {downloadType === "web_extension" && (
+          <div className="space-y-2 pl-4 border-l">
+            {webExtLinks.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">No store links yet.</p>
+            )}
+            {webExtLinks.map((link, i) => (
+              <div key={i} className="flex gap-2">
+                <Input
+                  placeholder="Label (e.g. Google Chrome)"
+                  value={link.label}
+                  onChange={(e) => {
+                    const updated = [...webExtLinks]
+                    updated[i] = { ...updated[i], label: e.target.value }
+                    set("downloadInfo", { ...info, webExtensionLinks: updated })
+                  }}
+                  className="h-9 w-48 shrink-0"
+                />
+                <Input
+                  placeholder="https://..."
+                  value={link.url}
+                  onChange={(e) => {
+                    const updated = [...webExtLinks]
+                    updated[i] = { ...updated[i], url: e.target.value }
+                    set("downloadInfo", { ...info, webExtensionLinks: updated })
+                  }}
+                  className="h-9 flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() =>
+                    set("downloadInfo", {
+                      ...info,
+                      webExtensionLinks: webExtLinks.filter((_, j) => j !== i),
+                    })
+                  }
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                set("downloadInfo", { ...info, webExtensionLinks: [...webExtLinks, { label: "", url: "" }] })
+              }
+            >
+              + Add Store Link
+            </Button>
           </div>
         )}
       </div>
@@ -612,7 +687,6 @@ function WebAppFields({
       <FieldRow label="Slug" value={(data.slug as string) ?? ""} onChange={(v) => set("slug", v)} />
       <FieldRow label="Short Description" value={(data.shortDescription as string) ?? ""} onChange={(v) => set("shortDescription", v)} />
       <FieldRow label="Thumbnail URL" value={(data.thumbnailUrl as string) ?? ""} onChange={(v) => set("thumbnailUrl", v)} />
-      <FieldRow label="Hero Image URL" value={(data.heroImageUrl as string) ?? ""} onChange={(v) => set("heroImageUrl", v)} />
       <FieldRow label="Source Code Link" value={(data.sourceCodeLink as string) ?? ""} onChange={(v) => set("sourceCodeLink", v)} />
 
       <div className="grid grid-cols-[180px_1fr] items-start gap-4">

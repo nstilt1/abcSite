@@ -8,7 +8,8 @@ const SECTION_TO_FIELD: Record<string, string> = {
   downloads:  "downloads",
   blogs:      "blogs",
   products:   "products",
-  "web-apps": "webapps",
+  webapps:    "webapps",
+  "web-apps": "webapps", // backwards-compat alias
 };
 
 export async function POST(request: NextRequest) {

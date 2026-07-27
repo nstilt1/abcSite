@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import type { Download as DownloadItem, DownloadInfo } from "@/types/content"
-import { isAllPlatforms } from "@/types/content"
+import { isAllPlatforms, isWebExtension } from "@/types/content"
+import { ExternalLink } from "lucide-react"
 
 interface DownloadDialogProps {
   download: DownloadItem
@@ -123,6 +124,31 @@ function PerPlatformSection({ info }: { info: DownloadInfo }) {
   )
 }
 
+function WebExtensionSection({ info }: { info: DownloadInfo }) {
+  if (!isWebExtension(info)) return null
+  const links = info.webExtensionLinks.filter((l) => l.url?.trim())
+  if (links.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">Available as a browser extension:</p>
+      {links.map((link, i) => (
+        <div key={i} className="rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium text-sm">{link.label}</span>
+            <a href={link.url} target="_blank" rel="noreferrer" aria-label={`Get extension for ${link.label}`}>
+              <Button size="sm" className="gap-1.5">
+                <ExternalLink className="size-3.5" aria-hidden="true" />
+                Get
+              </Button>
+            </a>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
  * DownloadDialog – triggered by a single "Download" button that opens a modal
  * showing per-platform download buttons (only those with a valid URL) and
@@ -135,22 +161,30 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
   // allPlatformsDownloadLink: "" alongside per-platform links, so check all.
   const hasLinks = (() => {
     const info = download.downloadInfo as Record<string, unknown>
+    const webExtLinks = info.webExtensionLinks as { url?: string }[] | undefined
     return !!(
       (typeof info.allPlatformsDownloadLink === "string" && info.allPlatformsDownloadLink.trim()) ||
       (typeof info.windowsDownloadLink === "string" && info.windowsDownloadLink.trim()) ||
       (typeof info.macosDownloadLink === "string" && info.macosDownloadLink.trim()) ||
-      (typeof info.linuxDownloadLink === "string" && info.linuxDownloadLink.trim())
+      (typeof info.linuxDownloadLink === "string" && info.linuxDownloadLink.trim()) ||
+      (Array.isArray(webExtLinks) && webExtLinks.some((l) => l.url?.trim()))
     )
   })()
 
   if (!hasLinks) return null
 
+  const isWebExt = isWebExtension(download.downloadInfo)
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="lg" className="gap-2">
-          <Download className="size-4" aria-hidden="true" />
-          Download
+          {isWebExt ? (
+            <ExternalLink className="size-4" aria-hidden="true" />
+          ) : (
+            <Download className="size-4" aria-hidden="true" />
+          )}
+          {isWebExt ? "Get Extension" : "Download"}
         </Button>
       </DialogTrigger>
 
@@ -173,6 +207,7 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
 
           <AllPlatformsSection info={download.downloadInfo} />
           <PerPlatformSection info={download.downloadInfo} />
+          <WebExtensionSection info={download.downloadInfo} />
         </div>
       </DialogContent>
     </Dialog>

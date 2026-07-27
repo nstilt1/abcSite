@@ -13,7 +13,7 @@ export default function AboutPage() {
             Hyperformance Solutions by day. Altered Brain Chemistry by night.
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-zinc-300">
-            Classy in the front, party in the back.
+            A man and his computer.
           </p>
         </div>
 
@@ -21,7 +21,10 @@ export default function AboutPage() {
           <CardContent className="space-y-6 p-6 md:p-8">
             <p className="text-base leading-8 text-zinc-300">
               Hyperformance Solutions was founded by Noah Stiltner while he was
-              in college studying Computer Science. What started as a practical
+              in college studying Computer Science. He decided on the name "Altered 
+              Brain Chemistry" because he was neurodivergent and neurodivergent.com 
+              was already taken, so he found the next best name, a perfect theme 
+              for his projects. What started as a practical
               audio plugin project eventually turned into something much bigger.
               One of the earliest products was inspired in part by the
               Moogerfooger MF-101. The Mofo&apos;s Mojo was created as a way to 
@@ -53,8 +56,7 @@ export default function AboutPage() {
             </p>
 
             <p className="text-base leading-8 text-zinc-300">
-              That decision gave birth to 
-              <span className="font-semibold text-white">Software Licensor</span>.
+              That decision gave birth to <span className="font-semibold text-white">Software Licensor</span>.
               It was built in Rust for speed, portability, and long-term
               maintainability. Rust made it possible to target multiple
               environments cleanly, compile to a static library when needed, or

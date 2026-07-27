@@ -52,10 +52,28 @@ export interface DownloadInfoPerPlatform {
   linuxDownloadSha256?: string
 }
 
-export type DownloadInfo = DownloadInfoAllPlatforms | DownloadInfoPerPlatform
+/** A single labeled link, e.g. { label: "Google Chrome", url: "https://chrome.google.com/webstore/..." } */
+export interface WebExtensionLink {
+  label: string
+  url: string
+}
+
+/** Type C – browser extension, distributed via store links rather than a direct file download */
+export interface DownloadInfoWebExtension {
+  webExtensionLinks: WebExtensionLink[]
+}
+
+export type DownloadInfo =
+  | DownloadInfoAllPlatforms
+  | DownloadInfoPerPlatform
+  | DownloadInfoWebExtension
 
 export function isAllPlatforms(d: DownloadInfo): d is DownloadInfoAllPlatforms {
   return "allPlatformsDownloadLink" in d
+}
+
+export function isWebExtension(d: DownloadInfo): d is DownloadInfoWebExtension {
+  return "webExtensionLinks" in d
 }
 
 /** Normalise the dual old-string / new-object license entry format */

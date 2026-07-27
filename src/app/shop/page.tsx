@@ -3,8 +3,9 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useState, useMemo } from "react"
-import { getCollection, getSoftwareDownloads } from "@/lib/contentStore"
-import type { Product, InventoriedProduct } from "@/types/content"
+import { getCollection } from "@/lib/contentStore"
+import type { Product, InventoriedProduct, Download } from "@/types/content"
+import { isWebExtension } from "@/types/content"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { mediaURL } from "@/lib/mediaURL"
@@ -193,17 +194,27 @@ function SectionGrid({ title, subtitle, items }: { title: string; subtitle: stri
 }
 
 export default function ShopPage() {
-  const softwareDownloads = getSoftwareDownloads()
+  // All downloads live on the shop page together, whether or not they're
+  // purchasable through the site — items like web extensions are distributed
+  // via a browser store instead of Stripe, so they just don't get a
+  // "purchasable" badge below.
+  const allDownloads = (getCollection("downloads") as Download[]).filter((d) => d.visible !== false)
   const allProducts = getCollection("products") as Product[]
   const physicalGoods = allProducts.filter((p) => p.type === "inventoried") as InventoriedProduct[]
 
-  const softwareItems: ShopItem[] = softwareDownloads.map((d) => ({
+  const softwareItems: ShopItem[] = allDownloads.map((d) => ({
     slug: d.slug,
     name: d.name,
     shortDescription: d.shortDescription,
     thumbnailUrl: d.thumbnailUrl,
     href: `/downloads/${d.slug}`,
-    badge: <Badge variant="secondary">Software</Badge>,
+    badge: isWebExtension(d.downloadInfo) ? (
+      <Badge variant="outline">Browser Extension</Badge>
+    ) : d.software_licensor ? (
+      <Badge variant="secondary">Software</Badge>
+    ) : (
+      <Badge variant="outline">Free</Badge>
+    ),
     dateAdded: d.dateAdded,
   }))
 
