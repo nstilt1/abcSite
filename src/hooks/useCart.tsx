@@ -23,6 +23,29 @@ export type CartItem = {
   quantity: number;
   /** Human-readable label, e.g. "Perpetual", "Trial" */
   licenseType: string;
+  /**
+   * Distinguishes licensed-software cart items (default, omitted for
+   * backwards compat) from physical print-on-demand items. Physical items
+   * skip the license-ownership validation and CreateLicense/free-item flow
+   * entirely — see checkout/page.tsx and webhook/route.ts.
+   */
+  kind?: "software" | "physical";
+  /** Only present when kind === "physical". Carries the printable design. */
+  physical?: PhysicalCartConfig;
+};
+
+export type PhysicalCartConfig = {
+  /** Which product/mockup this was configured from, e.g. "kaleidomo-hoodie" */
+  productSlug: string;
+  mockupType: "hoodie" | "tshirt" | "tapestry";
+  /** Printify blueprint/print-provider/variant needed to submit the order */
+  printifyBlueprintId: number;
+  printifyPrintProviderId: number;
+  printifyVariantId: number;
+  /** Public URL of the rendered kaleidoscope snapshot, uploaded via presign-upload */
+  designImageUrl: string;
+  /** The slider/preset values used to generate the snapshot, for reference/support */
+  presetName: string;
 };
 
 type CartContextValue = {
@@ -30,10 +53,20 @@ type CartContextValue = {
   cartCount: number;
   cartTotalCents: number;
   addItem: (item: CartItem) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  /**
+   * For software items, pass the productId. For physical items (which may
+   * have multiple distinct designs of the same product in the cart), pass
+   * the item's own itemKey (see exported getCartItemKey below).
+   */
+  removeItem: (itemKey: string) => void;
+  updateQuantity: (itemKey: string, quantity: number) => void;
   clearCart: () => void;
 };
+
+/** Public accessor for a cart item's unique key, for use by removeItem/updateQuantity. */
+export function getCartItemKey(item: CartItem): string {
+  return mergeKey(item);
+}
 
 const ANONYMOUS_CART_KEY = "abc.cart.anonymous";
 
@@ -60,15 +93,34 @@ function writeCart(key: string, items: CartItem[]) {
 }
 
 /**
+ * Merge key for dedup in the cart map.
+ * Licensed software: keyed by productId alone (max 1 per product — business rule).
+ * Physical items: keyed by productId + designImageUrl, since a shopper may add
+ * several distinct customized designs of the same physical product.
+ */
+function mergeKey(item: CartItem): string {
+  if (item.kind === "physical" && item.physical) {
+    return `${item.productId}::${item.physical.designImageUrl}`;
+  }
+  return item.productId;
+}
+
+/**
  * Merge two cart arrays. For licensed software, max 1 per productId
- * (as per business rule: one license per product in cart).
+ * (as per business rule: one license per product in cart). Physical items
+ * are keyed by design so distinct configurations don't overwrite each other.
  */
 function mergeCartItems(existing: CartItem[], incoming: CartItem[]): CartItem[] {
   const merged = new Map<string, CartItem>();
-  for (const item of existing) merged.set(item.productId, item);
+  for (const item of existing) merged.set(mergeKey(item), item);
   for (const item of incoming) {
-    // Licensed software: quantity is always 1, latest wins
-    merged.set(item.productId, { ...item, quantity: 1 });
+    if (item.kind === "physical") {
+      // Physical items keep their real quantity; latest wins on conflict.
+      merged.set(mergeKey(item), item);
+    } else {
+      // Licensed software: quantity is always 1, latest wins
+      merged.set(mergeKey(item), { ...item, quantity: 1 });
+    }
   }
   return Array.from(merged.values());
 }
@@ -126,23 +178,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       cartCount,
       cartTotalCents,
       addItem: (item) => {
-        // Enforce max 1 per product
+        // mergeCartItems enforces qty 1 for software items; physical items
+        // keep whatever quantity the caller passed in.
+        setItems((current) => mergeCartItems(current, [item]));
+      },
+      removeItem: (itemKey) => {
         setItems((current) =>
-          mergeCartItems(current, [{ ...item, quantity: 1 }])
+          current.filter((item) => mergeKey(item) !== itemKey)
         );
       },
-      removeItem: (productId) => {
-        setItems((current) =>
-          current.filter((item) => item.productId !== productId)
-        );
-      },
-      updateQuantity: (productId, quantity) => {
-        // License items are always qty 1 — this is a no-op for safety
+      updateQuantity: (itemKey, quantity) => {
+        // License items are always qty 1 — this is a no-op for safety.
+        // Physical items may have any positive quantity.
         setItems((current) =>
           current
             .map((item) =>
-              item.productId === productId
-                ? { ...item, quantity: Math.max(1, quantity) }
+              mergeKey(item) === itemKey
+                ? { ...item, quantity: item.kind === "physical" ? Math.max(1, quantity) : 1 }
                 : item
             )
             .filter((item) => item.quantity > 0)
