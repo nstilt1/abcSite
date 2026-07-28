@@ -11,6 +11,7 @@ import type { Download, WebExtensionLink } from "@/types/content"
 import { isAllPlatforms, isWebExtension } from "@/types/content"
 import { mediaURL, resolveSourceCodeUrl } from "@/lib/mediaURL"
 import type { Metadata } from "next"
+import ReactMarkdown from "react-markdown"
 
 export const dynamic = "force-static"
 
@@ -30,6 +31,35 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: item.name,
     description: item.shortDescription ?? "",
   }
+}
+
+async function getChangelog(url?: string): Promise<string | null> {
+  if (!url?.trim()) return null
+
+  try {
+    const response = await fetch(url, { cache: "force-cache" })
+    if (!response.ok) return null
+    return await response.text()
+  } catch {
+    return null
+  }
+}
+
+function ChangelogAccordion({ changelog }: { changelog: string | null }) {
+  if (!changelog?.trim()) return null
+
+  return (
+    <details className="mt-4 overflow-hidden rounded-xl border bg-card">
+      <summary className="cursor-pointer select-none px-5 py-4 font-medium hover:bg-muted/50">
+        Click to see changelog
+      </summary>
+      <div className="border-t px-5 py-4">
+        <div className="prose prose-sm max-w-none dark:prose-invert">
+          <ReactMarkdown>{changelog}</ReactMarkdown>
+        </div>
+      </div>
+    </details>
+  )
 }
 
 function detectPlatforms(d: Download): string {
@@ -54,6 +84,7 @@ export default async function DownloadSlugPage({ params }: PageProps) {
   const heroSrc = mediaURL(item.heroImageUrl)
   const sourceUrl = resolveSourceCodeUrl(item.sourceCodeUrl)
   const isKaleidomo = slug.includes("kaleidomo")
+  const changelog = await getChangelog(item.changelogUrl)
 
   const licenseMode = item.software_licensor?.license_mode ?? "free"
   const hasLicensor = !!item.software_licensor
@@ -86,8 +117,8 @@ export default async function DownloadSlugPage({ params }: PageProps) {
   const isWebExt = isWebExtension(item.downloadInfo)
 
   const rows = [
-    { label: "Version",    value: item.version ?? null },
-    { label: "Date Added", value: item.dateAdded ?? null },
+    { label: "Version",      value: item.version ?? null },
+    { label: "Release Date", value: item.releaseDate ?? item.dateAdded ?? null },
     { label: isWebExt ? "Available For" : "Platforms", value: detectPlatforms(item) },
     { label: "License",    value: licenseLabel },
     hasDownloadLinks
@@ -135,21 +166,27 @@ export default async function DownloadSlugPage({ params }: PageProps) {
           <div className="relative mt-6 w-full overflow-hidden rounded-2xl border bg-black aspect-video">
             <KaleidoHeroStatic />
           </div>
+          <ChangelogAccordion changelog={changelog} />
           <KaleidoInteractive />
         </>
       ) : heroSrc ? (
-        <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
-          <Image
-            src={heroSrc}
-            alt={item.name}
-            width={0}
-            height={0}
-            className="h-auto w-auto max-w-full"
-            sizes="100vw"
-            priority
-          />
-        </div>
-      ) : null}
+        <>
+          <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
+            <Image
+              src={heroSrc}
+              alt={item.name}
+              width={0}
+              height={0}
+              className="h-auto w-auto max-w-full"
+              sizes="100vw"
+              priority
+            />
+          </div>
+          <ChangelogAccordion changelog={changelog} />
+        </>
+      ) : (
+        <ChangelogAccordion changelog={changelog} />
+      )}
 
       <article
         className="prose mt-8 max-w-none"

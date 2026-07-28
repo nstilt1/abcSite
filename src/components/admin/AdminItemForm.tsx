@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,6 +24,9 @@ import dynamic from "next/dynamic"
 // Dynamically imported to avoid SSR issues with Tiptap DOM dependencies
 const TiptapEditor = dynamic(() => import("@/components/admin/TiptapEditor"), { ssr: false })
 const TiptapPreview = dynamic(() => import("@/components/admin/TiptapPreview"), { ssr: false })
+// The customizer mounts the WASM/WebGPU engine onto a <canvas>, so it must
+// never run during SSR — same reasoning as the Tiptap components above.
+const KaleidomoProductCustomizer = dynamic(() => import("@/components/shop/KaleidomoProductCustomizer"), { ssr: false })
 
 interface AdminItemFormProps {
   section: AdminSection
@@ -330,7 +333,6 @@ function DownloadFields({
   set: (k: string, v: unknown) => void
 }) {
   const info = (data.downloadInfo as Record<string, unknown>) ?? {}
-
   const isAllPlatformsType = "allPlatformsDownloadLink" in info
   const isWebExtensionType = "webExtensionLinks" in info
   const downloadType: "universal" | "per_platform" | "web_extension" = isAllPlatformsType
@@ -348,6 +350,8 @@ function DownloadFields({
       <FieldRow label="Short Description" value={(data.shortDescription as string) ?? ""} onChange={(v) => set("shortDescription", v)} />
       <FieldRow label="Version" value={(data.version as string) ?? ""} onChange={(v) => set("version", v)} placeholder="1.0.0" />
       <FieldRow label="Date Added" value={(data.dateAdded as string) ?? ""} onChange={(v) => set("dateAdded", v)} type="date" />
+      <FieldRow label="Latest Release Date" value={(data.releaseDate as string) ?? ""} onChange={(v) => set("releaseDate", v)} type="date" />
+      <FieldRow label="Changelog URL" value={(data.changelogUrl as string) ?? ""} onChange={(v) => set("changelogUrl", v)} />
       <FieldRow label="Thumbnail URL" value={(data.thumbnailUrl as string) ?? ""} onChange={(v) => set("thumbnailUrl", v)} />
       <FieldRow label="Hero Image URL" value={(data.heroImageUrl as string) ?? ""} onChange={(v) => set("heroImageUrl", v)} />
       <FieldRow label="Source Code URL" value={(data.sourceCodeUrl as string) ?? ""} onChange={(v) => set("sourceCodeUrl", v)} />
@@ -361,9 +365,9 @@ function DownloadFields({
         <div className="grid grid-cols-3 gap-2">
           {(
             [
-              { value: "universal", label: "Universal", description: "One link that works on all platforms." },
-              { value: "per_platform", label: "Per Platform", description: "Separate installer links for Windows/macOS/Linux." },
-              { value: "web_extension", label: "Web Extension", description: "Links out to browser extension stores (Chrome, Edge, etc)." },
+              { value: "universal",     label: "Universal",      description: "One link for all platforms." },
+              { value: "per_platform",  label: "Per Platform",   description: "Separate links for Windows / macOS / Linux." },
+              { value: "web_extension", label: "Web Extension",  description: "Links to browser extension stores (Chrome, Edge, etc)." },
             ] as const
           ).map((opt) => (
             <button
@@ -531,24 +535,47 @@ function DownloadFields({
   )
 }
 
-// Default new preset — mirrors PRESETS entries in KaleidomoPageClient.tsx
+// Default new preset — image + hero-circle geometry + hue + zoom.
 function blankPreset(): KaleidomoPreset {
   return {
     name: "New Preset",
-    imageIndex: 0,
-    circle: { heroCircleLeftX: 0, heroCircleRightX: 0, heroCircleY: 0, heroDesiredLeftRotation: 0 },
-    orientationBaseSpeed: 20,
-    animationDuration: 40,
-    zoomMax: 0.9, zoomMin: 0.8, numZoomLoops: 2,
-    rotationRange: 30, rotationCycles: 1, rotationFn: "sin",
-    hueRange: 0, hueCycles: 0, hueFn: "sin",
-    hueRotation: 0, tileCount: 3, offsetX: 0, offsetY: 0,
+    sourceImageUrl: "",
+    heroCircleLeftX: 0,
+    heroCircleRightX: 0,
+    heroCircleY: 0,
+    hueRotation: 0,
+    zoom: 0.85,
   }
 }
 
-// Key-value style editor for one KaleidomoPreset. Field grouping mirrors the
-// Preset interface in KaleidomoPageClient.tsx so admin-entered values map
-// directly onto applyVs() without transformation.
+// Small labeled input used inside PresetEditor — unlike placeholder text,
+// a real <Label> stays visible once the field has a value.
+function PresetField({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string
+  value: string | number
+  onChange: (v: string) => void
+  type?: string
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input
+        type={type}
+        step={type === "number" ? "any" : undefined}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 text-sm"
+      />
+    </div>
+  )
+}
+
+// Compact row editor for one KaleidomoPreset.
 function PresetEditor({
   preset,
   onChange,
@@ -559,67 +586,123 @@ function PresetEditor({
   onRemove: () => void
 }) {
   const num = (v: string) => parseFloat(v) || 0
-  const int = (v: string) => parseInt(v, 10) || 0
 
   return (
     <div className="rounded-md border p-3 space-y-3 bg-muted/10">
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="Preset name"
-          value={preset.name}
-          onChange={(e) => onChange({ ...preset, name: e.target.value })}
-          className="h-8 text-sm flex-1"
-        />
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <PresetField label="Preset Name" value={preset.name} onChange={(v) => onChange({ ...preset, name: v })} />
+        </div>
         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={onRemove}>
           ×
         </Button>
       </div>
-
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <Label className="col-span-2 text-muted-foreground font-semibold">Image & Circle</Label>
-        <Input type="number" placeholder="Image Index" value={preset.imageIndex} onChange={(e) => onChange({ ...preset, imageIndex: int(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Tile Count" value={preset.tileCount} onChange={(e) => onChange({ ...preset, tileCount: int(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Hero Circle Left X" value={preset.circle.heroCircleLeftX} onChange={(e) => onChange({ ...preset, circle: { ...preset.circle, heroCircleLeftX: num(e.target.value) } })} className="h-8" />
-        <Input type="number" placeholder="Hero Circle Right X" value={preset.circle.heroCircleRightX} onChange={(e) => onChange({ ...preset, circle: { ...preset.circle, heroCircleRightX: num(e.target.value) } })} className="h-8" />
-        <Input type="number" placeholder="Hero Circle Y" value={preset.circle.heroCircleY} onChange={(e) => onChange({ ...preset, circle: { ...preset.circle, heroCircleY: num(e.target.value) } })} className="h-8" />
-        <Input type="number" placeholder="Hero Desired Left Rotation" value={preset.circle.heroDesiredLeftRotation} onChange={(e) => onChange({ ...preset, circle: { ...preset.circle, heroDesiredLeftRotation: num(e.target.value) } })} className="h-8" />
-        <Input type="number" placeholder="Offset X" value={preset.offsetX} onChange={(e) => onChange({ ...preset, offsetX: num(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Offset Y" value={preset.offsetY} onChange={(e) => onChange({ ...preset, offsetY: num(e.target.value) })} className="h-8" />
-
-        <Label className="col-span-2 text-muted-foreground font-semibold mt-1">Motion</Label>
-        <Input type="number" placeholder="Orientation Base Speed" value={preset.orientationBaseSpeed} onChange={(e) => onChange({ ...preset, orientationBaseSpeed: num(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Animation Duration (s)" value={preset.animationDuration} onChange={(e) => onChange({ ...preset, animationDuration: num(e.target.value) })} className="h-8" />
-
-        <Label className="col-span-2 text-muted-foreground font-semibold mt-1">Zoom</Label>
-        <Input type="number" step="0.01" placeholder="Zoom Max" value={preset.zoomMax} onChange={(e) => onChange({ ...preset, zoomMax: num(e.target.value) })} className="h-8" />
-        <Input type="number" step="0.01" placeholder="Zoom Min" value={preset.zoomMin} onChange={(e) => onChange({ ...preset, zoomMin: num(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Num Zoom Loops" value={preset.numZoomLoops} onChange={(e) => onChange({ ...preset, numZoomLoops: int(e.target.value) })} className="h-8" />
-
-        <Label className="col-span-2 text-muted-foreground font-semibold mt-1">Rotation</Label>
-        <Input type="number" placeholder="Rotation Range" value={preset.rotationRange} onChange={(e) => onChange({ ...preset, rotationRange: num(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Rotation Cycles" value={preset.rotationCycles} onChange={(e) => onChange({ ...preset, rotationCycles: num(e.target.value) })} className="h-8" />
-        <Input placeholder="Rotation Fn (e.g. sin, sin2)" value={preset.rotationFn} onChange={(e) => onChange({ ...preset, rotationFn: e.target.value })} className="h-8 col-span-2" />
-
-        <Label className="col-span-2 text-muted-foreground font-semibold mt-1">Hue</Label>
-        <Input type="number" placeholder="Hue Range" value={preset.hueRange} onChange={(e) => onChange({ ...preset, hueRange: num(e.target.value) })} className="h-8" />
-        <Input type="number" placeholder="Hue Cycles" value={preset.hueCycles} onChange={(e) => onChange({ ...preset, hueCycles: num(e.target.value) })} className="h-8" />
-        <Input placeholder="Hue Fn (e.g. sin, -cos, linear)" value={preset.hueFn} onChange={(e) => onChange({ ...preset, hueFn: e.target.value })} className="h-8" />
-        <Input type="number" placeholder="Hue Rotation" value={preset.hueRotation} onChange={(e) => onChange({ ...preset, hueRotation: num(e.target.value) })} className="h-8" />
+      <PresetField label="Source Image URL" value={preset.sourceImageUrl} onChange={(v) => onChange({ ...preset, sourceImageUrl: v })} />
+      <div className="grid grid-cols-2 gap-2">
+        <PresetField label="Hero Circle Left X" type="number" value={preset.heroCircleLeftX} onChange={(v) => onChange({ ...preset, heroCircleLeftX: num(v) })} />
+        <PresetField label="Hero Circle Right X" type="number" value={preset.heroCircleRightX} onChange={(v) => onChange({ ...preset, heroCircleRightX: num(v) })} />
+        <PresetField label="Hero Circle Y" type="number" value={preset.heroCircleY} onChange={(v) => onChange({ ...preset, heroCircleY: num(v) })} />
+        <PresetField label="Hue Rotation" type="number" value={preset.hueRotation} onChange={(v) => onChange({ ...preset, hueRotation: num(v) })} />
+        <PresetField label="Zoom" type="number" value={preset.zoom} onChange={(v) => onChange({ ...preset, zoom: num(v) })} />
       </div>
     </div>
+  )
+}
+
+/** Basic shape validation so a malformed/unrelated JSON file doesn't corrupt product data. */
+function isPresetArray(value: unknown): value is KaleidomoPreset[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (p) =>
+        p &&
+        typeof p === "object" &&
+        typeof (p as Record<string, unknown>).name === "string" &&
+        typeof (p as Record<string, unknown>).sourceImageUrl === "string" &&
+        typeof (p as Record<string, unknown>).heroCircleLeftX === "number" &&
+        typeof (p as Record<string, unknown>).heroCircleRightX === "number" &&
+        typeof (p as Record<string, unknown>).heroCircleY === "number" &&
+        typeof (p as Record<string, unknown>).hueRotation === "number" &&
+        typeof (p as Record<string, unknown>).zoom === "number"
+    )
   )
 }
 
 function KaleidomoPresetsField({
   value,
   onChange,
+  mockupType,
 }: {
   value: KaleidomoPreset[]
   onChange: (v: KaleidomoPreset[]) => void
+  mockupType: MockupType
 }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  function handleSaveJson() {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "kaleidomo-presets.json"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleLoadClick() {
+    setLoadError(null)
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = "" // allow re-selecting the same file later
+    if (!file) return
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text) as unknown
+      if (!isPresetArray(parsed)) {
+        setLoadError("File doesn't match the expected preset format.")
+        return
+      }
+      onChange(parsed)
+    } catch {
+      setLoadError("Couldn't read that file as JSON.")
+    }
+  }
+
   return (
     <div className="space-y-2">
-      <Label className="text-sm font-medium text-muted-foreground">Kaleidomo Presets</Label>
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium text-muted-foreground">Kaleidomo Presets</Label>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={handleFileSelected}
+          />
+          <Button type="button" variant="outline" size="sm" onClick={handleLoadClick}>
+            Load Presets JSON
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleSaveJson} disabled={value.length === 0}>
+            Save Presets JSON
+          </Button>
+        </div>
+      </div>
+      {loadError && <p className="text-xs text-destructive">{loadError}</p>}
+
+      {value.length > 0 && (
+        <div className="rounded-md border p-3 bg-muted/5">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Preview — pick a design below to see it projected onto the product
+          </p>
+          <KaleidomoProductCustomizer mockupType={mockupType} presets={value} />
+        </div>
+      )}
+
       <div className="space-y-3">
         {value.length === 0 && (
           <p className="text-xs text-muted-foreground italic">No presets yet.</p>
@@ -692,7 +775,6 @@ function ProductFields({
       {type === "physical_kaleidomo" && (
         <>
           <Separator />
-          <FieldRow label="Source Image URL" value={(data.sourceImageUrl as string) ?? ""} onChange={(v) => set("sourceImageUrl", v)} placeholder="https://... (image the kaleidoscope pattern is generated from)" />
 
           <div className="grid grid-cols-[180px_1fr] items-center gap-4">
             <Label className="text-right text-sm font-medium text-muted-foreground">Mockup Type</Label>
@@ -736,6 +818,7 @@ function ProductFields({
           <KaleidomoPresetsField
             value={(data.presets as KaleidomoPreset[]) ?? []}
             onChange={(v) => set("presets", v)}
+            mockupType={(data.mockupType as MockupType) ?? "tshirt"}
           />
         </>
       )}
@@ -853,6 +936,7 @@ function WebAppFields({
       <FieldRow label="Slug" value={(data.slug as string) ?? ""} onChange={(v) => set("slug", v)} />
       <FieldRow label="Short Description" value={(data.shortDescription as string) ?? ""} onChange={(v) => set("shortDescription", v)} />
       <FieldRow label="Thumbnail URL" value={(data.thumbnailUrl as string) ?? ""} onChange={(v) => set("thumbnailUrl", v)} />
+      <FieldRow label="Hero Image URL" value={(data.heroImageUrl as string) ?? ""} onChange={(v) => set("heroImageUrl", v)} />
       <FieldRow label="Source Code Link" value={(data.sourceCodeLink as string) ?? ""} onChange={(v) => set("sourceCodeLink", v)} />
 
       <div className="grid grid-cols-[180px_1fr] items-start gap-4">
@@ -994,7 +1078,6 @@ function getDefaultItem(section: AdminSection): Record<string, unknown> {
         shortDescription: "",
         stock: 0,
         // physical_kaleidomo fields (unused unless type is switched to it)
-        sourceImageUrl: "",
         mockupType: "tshirt",
         priceId: "",
         priceCents: 0,

@@ -79,6 +79,7 @@ export function isWebExtension(d: DownloadInfo): d is DownloadInfoWebExtension {
 export function isPhysicalKaleidomo(p: Product): p is PhysicalKaleidomoProduct {
   return p.type === "physical_kaleidomo"
 }
+
 /** Normalise the dual old-string / new-object license entry format */
 export function parseLicenseEntry(
   val: LicensePriceEntry | string
@@ -96,6 +97,10 @@ export interface Download {
   heroImageUrl?: string
   shortDescription?: string
   dateAdded?: string
+  /** Date the currently published build was released (YYYY-MM-DD). */
+  releaseDate?: string
+  /** CDN URL of the Markdown changelog uploaded with the current release. */
+  changelogUrl?: string
   version?: string
   visible: boolean
   sourceCodeUrl?: string
@@ -143,39 +148,20 @@ export interface ApiDrivenProduct {
 // ─── Physical (Printify) Products ─────────────────────────────────────────────
 
 /**
- * Mirrors the CircleConfig shape from KaleidomoPageClient.tsx so admin-entered
- * presets are drop-in compatible with the existing WASM control code.
- */
-export interface CircleConfig {
-  heroCircleLeftX: number
-  heroCircleRightX: number
-  heroCircleY: number
-  heroDesiredLeftRotation: number
-}
-
-/**
- * Mirrors the Preset shape from KaleidomoPageClient.tsx (see that file for
- * field semantics — animationDuration is an oscillator period, not a timer).
+ * A saved starting point for the physical-product customizer.
+ * Includes source image, hero-circle geometry, hue shift, and a single zoom
+ * level. Rotation range, tile count, and crop offset remain slider-controlled
+ * live on the customizer page, since those tend to need per-shopper tweaking
+ * rather than being part of the "look" a preset defines.
  */
 export interface KaleidomoPreset {
   name: string
-  imageIndex: number
-  circle: CircleConfig
-  orientationBaseSpeed: number
-  animationDuration: number
-  zoomMax: number
-  zoomMin: number
-  numZoomLoops: number
-  rotationRange: number
-  rotationCycles: number
-  rotationFn: string
-  hueRange: number
-  hueCycles: number
-  hueFn: string
+  sourceImageUrl: string
+  heroCircleLeftX: number
+  heroCircleRightX: number
+  heroCircleY: number
   hueRotation: number
-  tileCount: number
-  offsetX: number
-  offsetY: number
+  zoom: number
 }
 
 /** Which blank product this design gets printed on via Printify. */
@@ -189,8 +175,6 @@ export interface PhysicalKaleidomoProduct {
   thumbnailUrl?: string
   heroImageUrl?: string
   shortDescription?: string
-  /** Source image the kaleidoscope pattern is generated from (same as SOURCE_IMAGES entries). */
-  sourceImageUrl: string
   mockupType: MockupType
   /** Stripe price ID for checkout. */
   priceId: string
@@ -200,7 +184,11 @@ export interface PhysicalKaleidomoProduct {
   printifyBlueprintId: number
   printifyPrintProviderId: number
   printifyVariantId: number
-  /** Selectable starting configurations, same shape as the web app's PRESETS array. */
+  /**
+   * Selectable starting configurations (source image + hero-circle geometry +
+   * hue shift). Managed via the "Save/Load Presets JSON" buttons in the admin
+   * form rather than edited field-by-field.
+   */
   presets: KaleidomoPreset[]
 }
 
