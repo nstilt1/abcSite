@@ -26,16 +26,19 @@ interface BlogRecord {
   tiptap: object
 }
 
+type PageProps = {
+  params: Promise<{ slug: string }>
+}
+
 export function generateStaticParams() {
   return (getCollection("blogs") as BlogRecord[]).map((b) => ({ slug: b.slug }))
 }
 
-export function generateMetadata({
+export async function generateMetadata({
   params,
-}: {
-  params: { slug: string }
-}): Metadata {
-  const item = getItem("blogs", params.slug) as BlogRecord | null
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params
+  const item = getItem("blogs", slug) as BlogRecord | null
   if (!item) return {}
   return {
     title: item.name,
@@ -44,8 +47,9 @@ export function generateMetadata({
   }
 }
 
-export default function BlogSlugPage({ params }: { params: { slug: string } }) {
-  const item = getItem("blogs", params.slug) as BlogRecord | null
+export default async function BlogSlugPage({ params }: PageProps) {
+  const { slug } = await params
+  const item = getItem("blogs", slug) as BlogRecord | null
   if (!item) notFound()
 
   const bodyHtml = tiptapDocToHtml(item.tiptap)
