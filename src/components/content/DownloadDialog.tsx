@@ -197,9 +197,9 @@ export default function DownloadDialog({ download }: DownloadDialogProps) {
           {download.version && (
             <div className="flex items-center gap-2">
               <Badge variant="outline">v{download.version}</Badge>
-              {download.dateAdded && (
+              {(download.releaseDate ?? download.dateAdded) && (
                 <span className="text-xs text-muted-foreground">
-                  {download.dateAdded}
+                  Released {download.releaseDate ?? download.dateAdded}
                 </span>
               )}
             </div>

@@ -397,7 +397,7 @@ export default function Home() {
       <ShowcaseSection
         title="Dream with the Daydream Filter"
         description="A Chrome/Edge extension that changes all of the colors of every website, image, and video viewed in a web browser. Also implemented for singleplayer games using ReShade."
-        linkHref="/daydream-filter"
+        linkHref="/daydream-filter-web"
         linkLabel="View Daydream Filter"
         mediaPosition="left"
         mobileMediaPosition="bottom"

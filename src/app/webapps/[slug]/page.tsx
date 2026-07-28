@@ -10,12 +10,17 @@ import type { Metadata } from "next"
 
 export const dynamic = "force-static"
 
+type PageProps = {
+  params: Promise<{ slug: string }>
+}
+
 export function generateStaticParams() {
   return (getCollection("webapps") as WebApp[]).map((w) => ({ slug: w.slug }))
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
-  const item = getItem("webapps", params.slug) as WebApp | null
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params
+  const item = getItem("webapps", slug) as WebApp | null
   if (!item) return {}
   return {
     title: item.name,
@@ -23,8 +28,9 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   }
 }
 
-export default function WebAppSlugPage({ params }: { params: { slug: string } }) {
-  const item = getItem("webapps", params.slug) as WebApp | null
+export default async function WebAppSlugPage({ params }: PageProps) {
+  const { slug } = await params
+  const item = getItem("webapps", slug) as WebApp | null
   if (!item) notFound()
 
   const bodyHtml = tiptapDocToHtml(item.tiptap as object)
@@ -86,7 +92,19 @@ export default function WebAppSlugPage({ params }: { params: { slug: string } })
 
         <MetadataTable rows={rows} />
 
-        {mediaURL(item.heroImageUrl) && (
+        {/* Embed the app in an iframe at the hero position, passing embed=1 so the
+            app can detect it's running embedded and adjust its UI accordingly.
+            Falls back to the static hero image if no URL is configured. */}
+        {item.urls?.[0] ? (
+          <div className="mt-6 overflow-hidden rounded-2xl border bg-muted">
+            <iframe
+              src={`${item.urls[0]}${item.urls[0].includes("?") ? "&" : "?"}embed=1`}
+              title={item.name}
+              className="w-full h-[600px]"
+              allow="autoplay; fullscreen"
+            />
+          </div>
+        ) : mediaURL(item.heroImageUrl) ? (
           <div className="mt-6 overflow-hidden rounded-2xl border bg-muted flex justify-center">
             <Image
               src={mediaURL(item.heroImageUrl)!}
@@ -98,7 +116,7 @@ export default function WebAppSlugPage({ params }: { params: { slug: string } })
               priority
             />
           </div>
-        )}
+        ) : null}
       </header>
 
       <article

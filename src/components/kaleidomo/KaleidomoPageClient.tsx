@@ -64,6 +64,37 @@ let wasmModPromise: Promise<any> | null = null;
 
 const KALEIDO_TYPE_IDX: number = 4;
 
+// ─── Mobile layout constants ──────────────────────────────────────────────────
+
+// Matches Tailwind's `md` breakpoint — below this width we render the
+// YouTube-style mobile layout (mini-player + sticky settings sheet) instead
+// of the desktop left-panel layout.
+const MOBILE_BREAKPOINT_PX = 768;
+
+// Height (px) of the empty spacer rendered above the sticky video section on
+// mobile — pure scroll room so the user can pull/scroll down by this amount
+// to peek at whatever sits above this component (e.g. the site navbar),
+// without that navbar permanently eating into the video's screen space.
+const MOBILE_NAVBAR_PEEK_PX = 56;
+
+// Height (px) of the collapsed "mini player" canvas region on mobile when the
+// settings sheet is open — i.e. the strip the canvas shrinks into, beneath
+// which the sticky Settings header + scrollable settings list live.
+const MOBILE_MINI_PLAYER_HEIGHT_PX = 220;
+
+/**
+ * Direction the canvas rotates on mobile while in the fullscreen view, so the
+ * tileCount — which normally counts tiles fitting horizontally — instead
+ * counts tiles fitting vertically (matching a portrait phone's aspect ratio).
+ * 1 = rotate right (clockwise) 90deg, -1 = rotate left (counter-clockwise) 90deg.
+ * Not certain which reads correctly against the WASM render — flip this
+ * constant if the rotation direction looks wrong. The rotation is only ever
+ * applied in the mobile fullscreen view; it is automatically un-applied
+ * (reverted to 0deg) when swiping down into the settings sheet view, and
+ * re-applied when swiping back up into fullscreen — see `mobileRotated` below.
+ */
+const MOBILE_ROTATE_DIRECTION: 1 | -1 = -1;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getWasmMod(): Promise<any> {
   if (!wasmModPromise) {
@@ -462,6 +493,83 @@ export default function KaleidoPageClient() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Mobile layout ─────────────────────────────────────────────────────────
+  // Below MOBILE_BREAKPOINT_PX we swap to the YouTube-style mobile layout:
+  // a "fullscreen" view (canvas fills the viewport) and a "settings" view
+  // (canvas shrinks to a sticky mini-player strip while the settings sheet
+  // occupies the rest of the page). Unlike a typical "fullscreen overlay"
+  // pattern, this is driven by REAL page scroll (not a fixed/overflow-hidden
+  // trap): the video section is `position: sticky`, so scrolling down past it
+  // naturally pins it to the top of the viewport at its mini-player height,
+  // and scrolling back up naturally releases it AND reveals whatever sits
+  // above this component in the page (e.g. the site navbar) — exactly like
+  // pulling down on a YouTube watch page.
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileView, setMobileView] = useState<"fullscreen" | "settings">("fullscreen");
+  // Tracks actual viewport pixels so the rotated mobile canvas can swap its
+  // width/height to match (CSS rotate() doesn't reflow layout on its own).
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`);
+    function updateIsMobile() { setIsMobile(mq.matches); }
+    updateIsMobile();
+    mq.addEventListener("change", updateIsMobile);
+    return () => mq.removeEventListener("change", updateIsMobile);
+  }, []);
+
+  useEffect(() => {
+    function updateViewport() { setViewport({ w: window.innerWidth, h: window.innerHeight }); }
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+    };
+  }, []);
+
+  // True only in the mobile fullscreen view — drives both the CSS rotation
+  // of the canvas and the WASM backing-resolution swap below.
+  const mobileRotated = isMobile && mobileView === "fullscreen";
+
+  // ── Mobile view control ───────────────────────────────────────────────────
+  // mobileView is now driven explicitly (button taps / mini-player tap) rather
+  // than inferred from scroll position — the previous IntersectionObserver
+  // approach was unreliable. rootRef is still used to smooth-scroll the
+  // fullscreen video section back under the navbar-peek spacer when entering
+  // the fullscreen view.
+
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  function enterMobileFullscreen() {
+    setMobileView("fullscreen");
+    // Scroll the spacer above the video back into place so the video sits
+    // flush at the top, ready to be pulled down again to reveal the navbar.
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function enterMobileSettings() {
+    setMobileView("settings");
+  }
+
+  // ── Desktop fullscreen "taskbar" ──────────────────────────────────────────
+  // While in native (desktop) fullscreen, the bottom audio-controls bar
+  // behaves like a Windows auto-hide taskbar: it stays off-screen until the
+  // mouse approaches the bottom edge, then slides up; moving away lets it
+  // slide back down out of the way of the visualizer.
+
+  const [showFsHud, setShowFsHud] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreen) { setShowFsHud(false); return; }
+    function onMouseMove(e: MouseEvent) {
+      setShowFsHud(window.innerHeight - e.clientY < 80);
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    return () => window.removeEventListener("mousemove", onMouseMove);
+  }, [isFullscreen]);
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function set<K extends keyof ControlState>(key: K, value: ControlState[K]) {
@@ -642,13 +750,22 @@ export default function KaleidoPageClient() {
     if (!canvas) return;
     function resize() {
       if (!canvas) return;
-      canvas.width  = isFullscreen ? window.screen.width  : 1920;
-      canvas.height = isFullscreen ? window.screen.height : 1080;
+      if (mobileRotated) {
+        // Mobile fullscreen view: canvas is visually rotated 90deg via CSS
+        // (see render below), so swap the backing resolution to match —
+        // width becomes the viewport height and vice versa — otherwise the
+        // rendered image is stretched/blurry after rotation.
+        canvas.width  = window.innerHeight;
+        canvas.height = window.innerWidth;
+      } else {
+        canvas.width  = isFullscreen ? window.screen.width  : 1920;
+        canvas.height = isFullscreen ? window.screen.height : 1080;
+      }
     }
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, [isFullscreen]);
+  }, [isFullscreen, mobileRotated]);
 
   // ── Fullscreen ────────────────────────────────────────────────────────────
 
@@ -988,23 +1105,57 @@ export default function KaleidoPageClient() {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-black text-white">
-      {/* Left controls panel (hidden while fullscreen) */}
-      {!isFullscreen && (
-        <aside className="w-64 shrink-0 overflow-y-auto border-r border-white/10 bg-zinc-950">
-          {controlPanel}
-        </aside>
-      )}
+    // Mobile-first: normal block flow (NOT h-screen/overflow-hidden) so the
+    // real page can scroll. A small spacer above the sticky video section
+    // gives just enough scroll room to pull down and peek at whatever sits
+    // above this component (e.g. a site navbar) without it permanently
+    // eating into the video's screen space. Desktop (md+) keeps the original
+    // fixed two-column h-screen layout (the spacer is hidden there).
+    <div ref={rootRef} className="flex w-full flex-col bg-black text-white md:h-screen md:flex-row md:overflow-hidden">
+      {/* Navbar-peek spacer — mobile only, sits above the sticky video. */}
+      <div className="w-full md:hidden" style={{ height: MOBILE_NAVBAR_PEEK_PX }} aria-hidden="true" />
 
-      {/* Main canvas + overlay */}
-      <div ref={containerRef} className="relative flex flex-1 flex-col items-center justify-center bg-black">
-        {/* Canvas */}
+      {/* Main canvas + overlay.
+          On mobile this wrapper IS the "video player": `position: sticky`
+          pins it to the top of the viewport. At its full height (100dvh) it
+          fills the screen; the mini-player height kicks in once mobileView
+          is switched to "settings" (via the Fullscreen/collapse buttons
+          below, or by tapping the mini-player itself) — same pinned-to-top
+          behavior as the YouTube app. */}
+      <div
+        ref={containerRef}
+        className="sticky top-0 z-30 flex w-full flex-col items-center justify-center overflow-hidden bg-black transition-[height] duration-300 ease-out md:z-auto md:order-2 md:h-screen md:flex-1"
+        style={{ height: isMobile ? (mobileView === "fullscreen" ? "100dvh" : `${MOBILE_MINI_PLAYER_HEIGHT_PX}px`) : undefined }}
+        onClick={() => {
+          // Tap the mini-player to re-expand, like tapping a YouTube mini-player.
+          if (isMobile && mobileView === "settings") enterMobileFullscreen();
+        }}
+      >
+        {/* Canvas — on mobile, while in the fullscreen view, it's rotated
+            MOBILE_ROTATE_DIRECTION * 90deg so the tileCount (normally counted
+            horizontally) is counted vertically instead, matching a portrait
+            phone. Centered via absolute positioning + transform since CSS
+            rotate() doesn't reflow the box itself. Reverts to the normal
+            (unrotated) h-full/w-full layout in the mini-player/settings view
+            and on desktop. */}
         <canvas
           ref={canvasRef}
           width={1920}
           height={1080}
-          className="h-full w-full object-contain"
-          style={{ display: "block" }}
+          className={mobileRotated ? undefined : "h-full w-full object-contain"}
+          style={
+            mobileRotated
+              ? {
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  width: viewport.h ? `${viewport.h}px` : "100vh",
+                  height: viewport.w ? `${viewport.w}px` : "100vw",
+                  transform: `translate(-50%, -50%) rotate(${MOBILE_ROTATE_DIRECTION * 90}deg)`,
+                  display: "block",
+                }
+              : { display: "block" }
+          }
         />
 
         {/* GPU / WebGPU unavailable overlay */}
@@ -1025,54 +1176,130 @@ export default function KaleidoPageClient() {
           </div>
         )}
 
-        {/* Bottom HUD (audio + fullscreen) — hidden while fullscreen */}
-        {!isFullscreen && (
-          <div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center gap-2 bg-black/60 px-4 py-2 backdrop-blur-sm">
+        {/* Bottom HUD (audio + fullscreen) — desktop only.
+            Always rendered (even while fullscreen) so it can act as a
+            Windows-taskbar-style auto-hide bar: outside fullscreen it's
+            always docked in place (translate-y-0); while fullscreen it stays
+            off-screen (translate-y-full) until showFsHud flips true (mouse
+            near the bottom edge — see the effect above), then slides up, and
+            slides back down ("unsticks") once the mouse moves away. */}
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-40 hidden flex-wrap items-center gap-2 bg-black/60 px-4 py-2 backdrop-blur-sm transition-transform duration-200 ease-out md:flex
+            ${isFullscreen ? (showFsHud ? "translate-y-0" : "translate-y-full") : "translate-y-0"}`}
+          // Stop these clicks from bubbling to the window-level click handler
+          // that exits fullscreen on any click — otherwise using the taskbar
+          // while fullscreen would immediately kick you back out of it.
+          onClick={(e) => e.stopPropagation()}
+        >
 
-            {/* Now playing label */}
-            <span className="max-w-[180px] truncate text-xs font-medium text-white/80">
-              {activeSong.title || "—"}
-            </span>
+          {/* Now playing label */}
+          <span className="max-w-[180px] truncate text-xs font-medium text-white/80">
+            {activeSong.title || "—"}
+          </span>
 
-            {/* Play-mode cycle */}
-            <button type="button" onClick={cyclePlayMode}
-              className="rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white hover:bg-zinc-800"
-              title="Cycle play mode">
-              {playModeLabel[playMode]}
-            </button>
+          {/* Play-mode cycle */}
+          <button type="button" onClick={cyclePlayMode}
+            className="rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white hover:bg-zinc-800"
+            title="Cycle play mode">
+            {playModeLabel[playMode]}
+          </button>
 
-            {/* Song list (bundled) */}
-            {!uploadedSong && (
-              <select
-                className="max-w-[150px] rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
-                value={activeSongIndex}
-                onChange={(e) => selectSongByIndex(Number(e.target.value))}
-              >
-                {BUNDLED_SONGS.map((s, i) => (
-                  <option key={i} value={i}>{s.title}</option>
-                ))}
-              </select>
-            )}
+          {/* Song list (bundled) */}
+          {!uploadedSong && (
+            <select
+              className="max-w-[150px] rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
+              value={activeSongIndex}
+              onChange={(e) => selectSongByIndex(Number(e.target.value))}
+            >
+              {BUNDLED_SONGS.map((s, i) => (
+                <option key={i} value={i}>{s.title}</option>
+              ))}
+            </select>
+          )}
 
-            {uploadedSong && (
-              <span className="max-w-[130px] truncate text-xs text-white/60">{uploadedSong.title}</span>
-            )}
+          {uploadedSong && (
+            <span className="max-w-[130px] truncate text-xs text-white/60">{uploadedSong.title}</span>
+          )}
 
-            {/* Upload */}
-            <label className="cursor-pointer rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white hover:bg-zinc-800">
-              Upload
-              <input type="file" accept="audio/*" className="sr-only" onChange={handleUpload} />
-            </label>
+          {/* Upload */}
+          <label className="cursor-pointer rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white hover:bg-zinc-800">
+            Upload
+            <input type="file" accept="audio/*" className="sr-only" onChange={handleUpload} />
+          </label>
 
-            {/* Transport */}
-            <Button size="sm" variant="ghost" onClick={handlePlay}      disabled={!activeSong.url || isPlaying} className="h-7 px-2 text-xs">▶ Play</Button>
-            <Button size="sm" variant="ghost" onClick={pausePlayback}   disabled={!isPlaying}                   className="h-7 px-2 text-xs">⏸ Pause</Button>
-            <Button size="sm" variant="ghost" onClick={restartPlayback} disabled={!activeSong.url}              className="h-7 px-2 text-xs">⏮ Restart</Button>
+          {/* Transport */}
+          <Button size="sm" variant="ghost" onClick={handlePlay}      disabled={!activeSong.url || isPlaying} className="h-7 px-2 text-xs">▶ Play</Button>
+          <Button size="sm" variant="ghost" onClick={pausePlayback}   disabled={!isPlaying}                   className="h-7 px-2 text-xs">⏸ Pause</Button>
+          <Button size="sm" variant="ghost" onClick={restartPlayback} disabled={!activeSong.url}              className="h-7 px-2 text-xs">⏮ Restart</Button>
 
-            {audioError && <span className="text-xs text-red-400">{audioError}</span>}
+          {audioError && <span className="text-xs text-red-400">{audioError}</span>}
 
-            <div className="ml-auto">
+          <div className="ml-auto">
+            {!isFullscreen && (
               <Button size="sm" variant="outline" onClick={enterFullscreen} className="h-7 px-2 text-xs">⛶ Fullscreen</Button>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile HUD — compact transport/song-select bar overlayed on (or, in
+            the mini-player state, sitting at the bottom of) the video section,
+            mirroring a standard mobile video player layout. Laid out as
+            stacked rows (rather than one wide row) so every control fits
+            within the screen width without horizontal scrolling, both in the
+            fullscreen view and the shorter mini-player/settings view.
+            stopPropagation keeps taps on these controls from also triggering
+            the mini-player tap-to-expand handler on the wrapping div above. */}
+        {isMobile && !isFullscreen && (
+          <div
+            className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 bg-black/70 px-2 py-2 backdrop-blur-sm md:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Row 1: now-playing title + expand/collapse toggle */}
+            <div className="flex items-center gap-1.5">
+              <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-white/80">
+                {activeSong.title || "—"}
+              </span>
+              <button
+                type="button"
+                onClick={mobileView === "fullscreen" ? enterMobileSettings : enterMobileFullscreen}
+                className="shrink-0 rounded border border-white/20 bg-zinc-900 px-2 py-1 text-xs text-white"
+                title={mobileView === "fullscreen" ? "Open settings" : "Enter fullscreen"}
+              >
+                {mobileView === "fullscreen" ? "Settings ▾" : "⛶ Fullscreen"}
+              </button>
+            </div>
+
+            {/* Row 2: transport controls */}
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="ghost" onClick={handlePlay}      disabled={!activeSong.url || isPlaying} className="h-7 shrink-0 px-2 text-xs">▶ Play</Button>
+              <Button size="sm" variant="ghost" onClick={pausePlayback}   disabled={!isPlaying}                   className="h-7 shrink-0 px-2 text-xs">⏸ Pause</Button>
+              <Button size="sm" variant="ghost" onClick={restartPlayback} disabled={!activeSong.url}              className="h-7 shrink-0 px-2 text-xs">⏮ Restart</Button>
+            </div>
+
+            {/* Row 3: song select + upload */}
+            <div className="flex items-center gap-1.5">
+              {!uploadedSong && (
+                <select
+                  className="min-w-0 flex-1 rounded border border-white/20 bg-zinc-900 px-1 py-1 text-[11px] text-white"
+                  value={activeSongIndex}
+                  onChange={(e) => selectSongByIndex(Number(e.target.value))}
+                >
+                  {BUNDLED_SONGS.map((s, i) => (
+                    <option key={i} value={i}>{s.title}</option>
+                  ))}
+                </select>
+              )}
+
+              {uploadedSong && (
+                <span className="min-w-0 flex-1 truncate text-[11px] text-white/60">{uploadedSong.title}</span>
+              )}
+
+              <label className="shrink-0 cursor-pointer rounded border border-white/20 bg-zinc-900 px-2 py-1 text-[11px] text-white">
+                Upload
+                <input type="file" accept="audio/*" className="sr-only" onChange={handleUpload} />
+              </label>
+
+              {audioError && <span className="shrink-0 truncate text-[10px] text-red-400">{audioError}</span>}
             </div>
           </div>
         )}
@@ -1084,6 +1311,42 @@ export default function KaleidoPageClient() {
           </div>
         )}
       </div>
+
+      {/* Settings panel:
+          - Desktop (md+): original static left-hand column (re-ordered to the
+            left via md:order-1), hidden while fullscreen.
+          - Mobile: flows normally BELOW the video section, never
+            fixed/translated — it scrolls into place with the page. Its
+            "Settings" header is sticky so it pins under the collapsed
+            mini-player while open. */}
+      {!isFullscreen && (
+        <aside className="flex w-full flex-col bg-zinc-950 md:order-1 md:h-screen md:w-64 md:shrink-0 md:border-r md:border-white/10">
+          {/* Sticky "Settings" header — mobile only. Pins to the top of the
+              viewport (just under the collapsed mini-player) while the
+              content below it scrolls. */}
+          <div
+            className="sticky z-10 flex shrink-0 items-center justify-between border-b border-t border-white/10 bg-zinc-950/95 px-4 py-3 backdrop-blur-sm md:hidden"
+            style={{ top: MOBILE_MINI_PLAYER_HEIGHT_PX }}
+          >
+            <h2 className="text-sm font-semibold tracking-wide">Settings</h2>
+            <div className="flex items-center gap-4 text-white/70">
+              <button type="button" title="Info" aria-label="Info" className="text-base leading-none hover:text-white">Φ</button>
+              <button type="button" title="Close" aria-label="Close settings"
+                onClick={enterMobileFullscreen}
+                className="text-lg leading-none hover:text-white">
+                ×
+              </button>
+            </div>
+          </div>
+
+          {/* Settings content — on mobile this is normal page flow (scrolls
+              with the page, beneath the sticky header above); on desktop it's
+              the original internally-scrolling column. */}
+          <div className="md:flex-1 md:overflow-y-auto">
+            {controlPanel}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

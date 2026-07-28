@@ -76,6 +76,10 @@ export function isWebExtension(d: DownloadInfo): d is DownloadInfoWebExtension {
   return "webExtensionLinks" in d
 }
 
+export function isPhysicalKaleidomo(p: Product): p is PhysicalKaleidomoProduct {
+  return p.type === "physical_kaleidomo"
+}
+
 /** Normalise the dual old-string / new-object license entry format */
 export function parseLicenseEntry(
   val: LicensePriceEntry | string
@@ -93,6 +97,10 @@ export interface Download {
   heroImageUrl?: string
   shortDescription?: string
   dateAdded?: string
+  /** Date the currently published build was released (YYYY-MM-DD). */
+  releaseDate?: string
+  /** CDN URL of the Markdown changelog uploaded with the current release. */
+  changelogUrl?: string
   version?: string
   visible: boolean
   sourceCodeUrl?: string
@@ -137,7 +145,58 @@ export interface ApiDrivenProduct {
   sourceImage: string
 }
 
-export type Product = SoftwareProduct | InventoriedProduct | ApiDrivenProduct
+// ─── Physical (Printify) Products ─────────────────────────────────────────────
+
+/**
+ * A saved starting point for the physical-product customizer.
+ * Includes source image, hero-circle geometry, hue shift, and a single zoom
+ * level. Rotation range, tile count, and crop offset remain slider-controlled
+ * live on the customizer page, since those tend to need per-shopper tweaking
+ * rather than being part of the "look" a preset defines.
+ */
+export interface KaleidomoPreset {
+  name: string
+  sourceImageUrl: string
+  heroCircleLeftX: number
+  heroCircleRightX: number
+  heroCircleY: number
+  hueRotation: number
+  zoom: number
+}
+
+/** Which blank product this design gets printed on via Printify. */
+export type MockupType = "hoodie" | "tshirt" | "tapestry"
+
+export interface PhysicalKaleidomoProduct {
+  type: "physical_kaleidomo"
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  mockupType: MockupType
+  /** Stripe price ID for checkout. */
+  priceId: string
+  /** Display price in cents. */
+  priceCents: number
+  /** Printify blueprint/print-provider identifiers needed to submit an order. */
+  printifyBlueprintId: number
+  printifyPrintProviderId: number
+  printifyVariantId: number
+  /**
+   * Selectable starting configurations (source image + hero-circle geometry +
+   * hue shift). Managed via the "Save/Load Presets JSON" buttons in the admin
+   * form rather than edited field-by-field.
+   */
+  presets: KaleidomoPreset[]
+}
+
+export type Product =
+  | SoftwareProduct
+  | InventoriedProduct
+  | ApiDrivenProduct
+  | PhysicalKaleidomoProduct
 
 // ─── Web Apps ─────────────────────────────────────────────────────────────────
 

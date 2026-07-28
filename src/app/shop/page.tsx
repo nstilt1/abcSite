@@ -194,8 +194,10 @@ function SectionGrid({ title, subtitle, items }: { title: string; subtitle: stri
 }
 
 export default function ShopPage() {
-  // All visible downloads appear on the shop page regardless of whether they're
-  // purchasable through the site — web extensions link out to browser stores instead.
+  // All downloads live on the shop page together, whether or not they're
+  // purchasable through the site — items like web extensions are distributed
+  // via a browser store instead of Stripe, so they just don't get a
+  // "purchasable" badge below.
   const allDownloads = (getCollection("downloads") as Download[]).filter((d) => d.visible !== false)
   const allProducts = getCollection("products") as Product[]
   const physicalGoods = allProducts.filter((p) => p.type === "inventoried") as InventoriedProduct[]
