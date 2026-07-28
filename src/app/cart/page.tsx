@@ -6,7 +6,7 @@ import { Trash2, ShoppingCart, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { useCart } from "@/hooks/useCart"
+import { useCart, getCartItemKey } from "@/hooks/useCart"
 
 function formatCents(cents: number): string {
   if (cents === 0) return "Free"
@@ -17,7 +17,7 @@ function formatCents(cents: number): string {
 }
 
 export default function CartPage() {
-  const { items, cartTotalCents, removeItem, clearCart } = useCart()
+  const { items, cartTotalCents, removeItem, updateQuantity, clearCart } = useCart()
   const router = useRouter()
 
   if (items.length === 0) {
@@ -50,41 +50,86 @@ export default function CartPage() {
       </div>
 
       <div className="space-y-3">
-        {items.map((item) => (
-          <div
-            key={item.productId}
-            className="flex items-start gap-4 rounded-xl border p-4"
-          >
-            <div className="flex-1 min-w-0">
-              <Link
-                href={`/downloads/${item.slug}`}
-                className="font-medium text-sm hover:underline"
-              >
-                {item.name}
-              </Link>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
-                  {item.licenseType}
-                </Badge>
+        {items.map((item) => {
+          const key = getCartItemKey(item)
+          const isPhysical = item.kind === "physical" && item.physical
+
+          return (
+            <div
+              key={key}
+              className="flex items-start gap-4 rounded-xl border p-4"
+            >
+              {isPhysical && item.physical && (
+                <img
+                  src={item.physical.designImageUrl}
+                  alt=""
+                  className="size-16 shrink-0 rounded-lg border object-cover"
+                />
+              )}
+
+              <div className="flex-1 min-w-0">
+                <Link
+                  href={isPhysical ? `/shop/${item.slug}` : `/downloads/${item.slug}`}
+                  className="font-medium text-sm hover:underline"
+                >
+                  {item.name}
+                </Link>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  {isPhysical && item.physical ? (
+                    <>
+                      <Badge variant="secondary" className="text-xs capitalize">
+                        {item.physical.mockupType}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {item.physical.presetName}
+                      </Badge>
+                    </>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">
+                      {item.licenseType}
+                    </Badge>
+                  )}
+                </div>
+                {isPhysical && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => updateQuantity(key, item.quantity - 1)}
+                    >
+                      −
+                    </Button>
+                    <span className="w-6 text-center text-sm tabular-nums">{item.quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => updateQuantity(key, item.quantity + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <span className="font-semibold tabular-nums">
+                  {formatCents(item.priceCents * item.quantity)}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeItem(key)}
+                >
+                  <Trash2 className="size-3.5" />
+                  <span className="sr-only">Remove</span>
+                </Button>
               </div>
             </div>
-
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <span className="font-semibold tabular-nums">
-                {formatCents(item.priceCents)}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                onClick={() => removeItem(item.productId)}
-              >
-                <Trash2 className="size-3.5" />
-                <span className="sr-only">Remove</span>
-              </Button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <Separator className="my-6" />

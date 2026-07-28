@@ -76,6 +76,9 @@ export function isWebExtension(d: DownloadInfo): d is DownloadInfoWebExtension {
   return "webExtensionLinks" in d
 }
 
+export function isPhysicalKaleidomo(p: Product): p is PhysicalKaleidomoProduct {
+  return p.type === "physical_kaleidomo"
+}
 /** Normalise the dual old-string / new-object license entry format */
 export function parseLicenseEntry(
   val: LicensePriceEntry | string
@@ -137,7 +140,75 @@ export interface ApiDrivenProduct {
   sourceImage: string
 }
 
-export type Product = SoftwareProduct | InventoriedProduct | ApiDrivenProduct
+// ─── Physical (Printify) Products ─────────────────────────────────────────────
+
+/**
+ * Mirrors the CircleConfig shape from KaleidomoPageClient.tsx so admin-entered
+ * presets are drop-in compatible with the existing WASM control code.
+ */
+export interface CircleConfig {
+  heroCircleLeftX: number
+  heroCircleRightX: number
+  heroCircleY: number
+  heroDesiredLeftRotation: number
+}
+
+/**
+ * Mirrors the Preset shape from KaleidomoPageClient.tsx (see that file for
+ * field semantics — animationDuration is an oscillator period, not a timer).
+ */
+export interface KaleidomoPreset {
+  name: string
+  imageIndex: number
+  circle: CircleConfig
+  orientationBaseSpeed: number
+  animationDuration: number
+  zoomMax: number
+  zoomMin: number
+  numZoomLoops: number
+  rotationRange: number
+  rotationCycles: number
+  rotationFn: string
+  hueRange: number
+  hueCycles: number
+  hueFn: string
+  hueRotation: number
+  tileCount: number
+  offsetX: number
+  offsetY: number
+}
+
+/** Which blank product this design gets printed on via Printify. */
+export type MockupType = "hoodie" | "tshirt" | "tapestry"
+
+export interface PhysicalKaleidomoProduct {
+  type: "physical_kaleidomo"
+  name: string
+  slug: string
+  tiptap: object
+  thumbnailUrl?: string
+  heroImageUrl?: string
+  shortDescription?: string
+  /** Source image the kaleidoscope pattern is generated from (same as SOURCE_IMAGES entries). */
+  sourceImageUrl: string
+  mockupType: MockupType
+  /** Stripe price ID for checkout. */
+  priceId: string
+  /** Display price in cents. */
+  priceCents: number
+  /** Printify blueprint/print-provider identifiers needed to submit an order. */
+  printifyBlueprintId: number
+  printifyPrintProviderId: number
+  printifyVariantId: number
+  /** Selectable starting configurations, same shape as the web app's PRESETS array. */
+  presets: KaleidomoPreset[]
+}
+
+export type Product =
+  | SoftwareProduct
+  | InventoriedProduct
+  | ApiDrivenProduct
+  | PhysicalKaleidomoProduct
 
 // ─── Web Apps ─────────────────────────────────────────────────────────────────
 

@@ -35,6 +35,19 @@ import AdminItemForm from "@/components/admin/AdminItemForm"
 import type { AdminSection } from "@/types/content"
 import { postToApi } from "@/lib/post"
 
+// ─── CDN fetch (via server-side proxy to avoid CORS) ─────────────────────────
+
+async function fetchFromCdn(section: AdminSection): Promise<Record<string, unknown>[]> {
+  // Fetch via the Next.js API proxy so the CDN request is server-side,
+  // avoiding CORS issues when running on localhost.
+  const res = await fetch(`/api/admin/sync?section=${section}`, { cache: "no-store" })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error((body as { error?: string }).error ?? `Sync failed: ${res.status}`)
+  }
+  return res.json() as Promise<Record<string, unknown>[]>
+}
+
 // ─── Local-storage persistence ────────────────────────────────────────────────
 
 function lsKey(section: AdminSection) {
@@ -198,15 +211,32 @@ export default function AdminSectionClient({
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  // Deploy state
-  const [deploying, setDeploying] = useState(false)
-  const [deployMsg, setDeployMsg] = useState<string | null>(null)
+  // Sync state
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
+  async function handleSync() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const fresh = await fetchFromCdn(section)
+      clearDraft(section)
+      setItems(fresh)
+      setHasDraft(false)
+      setSyncMsg(`Synced ${fresh.length} item${fresh.length !== 1 ? "s" : ""} from S3.`)
+    } catch (e: unknown) {
+      setSyncMsg(`Sync failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+  const [deployMsg, setDeployMsg] = useState<string | null>(null)
+  const [deploying, setDeploying] = useState<boolean>(false);
   // Rebuild state
   const [rebuilding, setRebuilding] = useState(false)
   const [rebuildMsg, setRebuildMsg] = useState<string | null>(null)
 
-  // Load draft from LS on mount
+  // On mount: restore any saved draft; user can explicitly sync from S3 to get fresh data.
   useEffect(() => {
     const draft = loadDraft(section)
     if (draft) {
@@ -321,6 +351,10 @@ export default function AdminSectionClient({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleSync} disabled={syncing}>
+            {syncing ? "Syncing…" : "Sync from S3"}
+          </Button>
+
           <Button
             onClick={() => {
               setCreating((v) => !v)
@@ -363,6 +397,18 @@ export default function AdminSectionClient({
           </Button>
         </div>
       </div>
+
+      {syncMsg && (
+        <p
+          className={`text-sm rounded-md px-3 py-2 ${
+            syncMsg.startsWith("Sync failed")
+              ? "bg-destructive/10 text-destructive"
+              : "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+          }`}
+        >
+          {syncMsg}
+        </p>
+      )}
 
       {deployMsg && (
         <p
